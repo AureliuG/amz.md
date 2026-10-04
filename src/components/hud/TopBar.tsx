@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ListChecks, Map as MapIcon, Pause, Play, Search, Warehouse } from "lucide-react";
+import { Bell, CalendarRange, ListChecks, Map as MapIcon, Pause, Play, Search, Warehouse } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { eventsUntil, type EventKind } from "@/lib/events";
 import { INSTITUTIONS } from "@/lib/seed";
@@ -34,9 +34,10 @@ export function TopBar() {
             ["warehouse", "Depozit", Warehouse],
             ["map", "Moldova", MapIcon],
             ["deliveries", "Livrări", ListChecks],
+            ["planning", "Program", CalendarRange],
           ] as const
         ).map(([v, label, Icon]) => (
-          <button key={v} onClick={() => setView(v)} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition ${view === v ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+          <button key={v} onClick={() => setView(v)} title={label} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition ${view === v ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
             <Icon size={14} />
             <span className="hidden sm:inline">{label}</span>
           </button>

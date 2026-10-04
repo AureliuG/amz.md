@@ -4,7 +4,7 @@ import type { Selection, Truck } from "./types";
 
 const FLEET_KEY = "nobilprest.truckCount";
 
-export type View = "warehouse" | "map" | "deliveries";
+export type View = "warehouse" | "map" | "deliveries" | "planning";
 
 interface UiState {
   view: View;

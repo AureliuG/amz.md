@@ -6,12 +6,20 @@ import { useEffect, useState } from "react";
 import { DAY_END, useUi } from "@/lib/store";
 import { FleetPanel, TrackingPanel } from "./hud/BottomPanels";
 import { DeliveriesView } from "./DeliveriesView";
+import { PlanningView } from "./PlanningView";
 import { DetailPanel } from "./hud/DetailPanel";
 import { Kpis } from "./hud/Kpis";
 import { TopBar } from "./hud/TopBar";
 
 // WebGL views can't render on the server: load them in the browser only.
-const Loading = () => <div className="grid h-full place-items-center text-[12px] text-slate-400">Se încarcă…</div>;
+const Loading = () => (
+  <div className="grid h-full place-items-center bg-[#eef2fb]">
+    <div className="flex flex-col items-center gap-3">
+      <div className="grid h-12 w-12 animate-pulse place-items-center rounded-2xl bg-gradient-to-br from-[#4d82ff] to-[#1f3fb3] text-[16px] font-bold text-white shadow-lg">NP</div>
+      <div className="text-[12px] text-slate-400">Se încarcă…</div>
+    </div>
+  </div>
+);
 const WarehouseScene = dynamic(() => import("./scene/WarehouseScene"), { ssr: false, loading: Loading });
 const MoldovaMap = dynamic(() => import("./map/MoldovaMap"), { ssr: false, loading: Loading });
 
@@ -67,9 +75,20 @@ export function Dashboard() {
   useClock();
   const view = useUi((s) => s.view);
   useEffect(() => useUi.getState().loadSavedFleet(), []);
-  // Esc closes the detail panel.
+  // Keyboard: Esc closes details, 1–4 switch pages, space plays/pauses the clock.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && useUi.getState().select(null);
+    const views = ["warehouse", "map", "deliveries", "planning"] as const;
+    const onKey = (e: KeyboardEvent) => {
+      const ui = useUi.getState();
+      if (e.key === "Escape") return ui.select(null);
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key >= "1" && e.key <= "4") ui.setView(views[Number(e.key) - 1]);
+      if (e.key === " ") {
+        e.preventDefault();
+        ui.setPlaying(!ui.playing);
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
@@ -90,16 +109,16 @@ export function Dashboard() {
             <MoldovaMap />
           </div>
         )}
-        {view === "deliveries" && (
+        {(view === "deliveries" || view === "planning") && (
           <>
-            <DeliveriesView />
+            {view === "deliveries" ? <DeliveriesView /> : <PlanningView />}
             <div className="pointer-events-none absolute right-3 top-3 z-20 sm:right-4 sm:top-4">
               <DetailPanel />
             </div>
           </>
         )}
         {/* HUD: the overlay never blocks the scene except where panels are */}
-        <div className={`pointer-events-none absolute inset-0 z-10 flex ${view === "deliveries" ? "hidden" : ""}`} data-hud>
+        <div className={`pointer-events-none absolute inset-0 z-10 flex ${view === "deliveries" || view === "planning" ? "hidden" : ""}`} data-hud>
           <div className="flex h-full w-full flex-col justify-between gap-3 p-3 sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <Kpis />

@@ -3,7 +3,7 @@
 import { Html, MapControls, OrthographicCamera } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Vector3, type Group } from "three";
+import { Color, Vector3, type DirectionalLight, type Group } from "three";
 import { BACK_DOCK_COUNT, DOCK_COUNT, PRODUCTS } from "@/lib/seed";
 import { STATUS_LABEL, truckState } from "@/lib/sim";
 import { useUi } from "@/lib/store";
@@ -417,6 +417,46 @@ function DockActivity({ dock }: { dock: number }) {
   );
 }
 
+const SKY = { dawn: new Color("#f1eefb"), noon: new Color("#eef2fb"), dusk: new Color("#f7efe6") };
+const SUN = { dawn: new Color("#ffe2c0"), noon: new Color("#ffffff"), dusk: new Color("#ffcfa0") };
+
+/** Sun follows the simulated clock: low and warm in the morning, high at noon, warm again before 18:00. */
+function DayLight() {
+  const light = useRef<DirectionalLight>(null);
+  const { scene } = useThree();
+  const sky = useMemo(() => new Color(), []);
+  useFrame(() => {
+    const t = useUi.getState().t;
+    const u = Math.min(1, Math.max(0, (t - 5.5 * 60) / (13 * 60))); // 05:30 → 18:30
+    const ang = u * Math.PI; // east → west
+    const elev = Math.sin(ang);
+    const warm = 1 - elev;
+    const from = u < 0.5 ? SUN.dawn : SUN.dusk;
+    const skyFrom = u < 0.5 ? SKY.dawn : SKY.dusk;
+    if (light.current) {
+      light.current.position.set(Math.cos(ang) * 110, 40 + elev * 80, 50 - elev * 10);
+      light.current.color.copy(SUN.noon).lerp(from, warm * 0.9);
+      light.current.intensity = 1.1 + elev * 0.5;
+    }
+    sky.copy(SKY.noon).lerp(skyFrom, warm);
+    scene.background = sky;
+  });
+  return (
+    <directionalLight
+      ref={light}
+      position={[60, 100, 50]}
+      intensity={1.5}
+      castShadow
+      shadow-mapSize={[2048, 2048]}
+      shadow-camera-left={-120}
+      shadow-camera-right={120}
+      shadow-camera-top={120}
+      shadow-camera-bottom={-120}
+      shadow-bias={-0.0005}
+    />
+  );
+}
+
 const HOME_TARGET = new Vector3(5, 0, 2);
 const HOME_OFFSET = new Vector3(90, 90, 113);
 const HOME_ZOOM = 9;
@@ -487,23 +527,12 @@ export default function WarehouseScene() {
   }, [right]);
   return (
     <Canvas shadows flat dpr={[1, 2]} frameloop={active ? "always" : "never"} onPointerMissed={() => select(null)}>
-      <color attach="background" args={["#eef2fb"]} />
       <OrthographicCamera makeDefault position={[95, 90, 115]} zoom={HOME_ZOOM} near={-500} far={1000} />
       <MapControls makeDefault target={[5, 0, 2]} enableDamping maxPolarAngle={1.2} minZoom={3} maxZoom={30} />
       <CameraRig />
       <hemisphereLight args={["#ffffff", "#dfe6f7", 1.6]} />
       <ambientLight intensity={0.5} />
-      <directionalLight
-        position={[60, 100, 50]}
-        intensity={1.5}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-110}
-        shadow-camera-right={110}
-        shadow-camera-top={110}
-        shadow-camera-bottom={-110}
-        shadow-bias={-0.0005}
-      />
+      <DayLight />
       <Ground />
       <Fence />
       <Building />

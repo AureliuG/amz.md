@@ -27,6 +27,7 @@ body {
   pointer-events: none;
 }
 .truck-dot {
+  position: relative;
   display: grid;
   place-items: center;
   color: #fff;
@@ -37,6 +38,27 @@ body {
   background: var(--c);
   border: 2px solid #fff;
   box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.35);
+}
+/* Heading arrow orbiting the badge while driving */
+.truck-arrow {
+  position: absolute;
+  inset: -9px;
+  display: none;
+  pointer-events: none;
+}
+.truck-arrow::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 7px solid var(--c);
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff);
+}
+.truck-marker.is-moving .truck-arrow {
+  display: block;
 }
 .truck-label {
   margin-top: 2px;
@@ -132,4 +154,16 @@ body {
   border-radius: 999px;
   background: #fff;
   border: 2px solid #2f6bff;
+}
+
+.truck-marker .truck-label {
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+.show-truck-labels .truck-marker .truck-label,
+.truck-marker.is-selected .truck-label,
+.truck-marker:hover .truck-label {
+  opacity: 1;
+  transform: none;
 }

@@ -12,6 +12,8 @@ hospitals, penitentiaries, social care) across Moldova. It has two views:
 
 - **Livrări:** every delivery of the day in one table, with search, status/truck filters and sorting.
 - **Activitate (🔔):** a live feed of loadings, departures, arrivals and deliveries.
+- **Program:** the day as a timeline, one row per truck (loading, driving, unloading, return) with a "now" line.
+- **Shortcuts:** 1–4 switch pages, space plays/pauses, Esc closes details. The 3D light follows the time of day.
 - **Time slider** in the top bar to scrub through the day; Esc closes the detail panel.
 
 Everything currently runs on **generated demo data** and a simulated clock (play/pause and speed

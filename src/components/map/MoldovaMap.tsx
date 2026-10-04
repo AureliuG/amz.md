@@ -132,10 +132,14 @@ export default function MoldovaMap() {
       attributionControl: { compact: true, customAttribution: "© OpenStreetMap contributors · OpenFreeMap" },
     });
     mapRef.current = map;
+    // Truck name labels only when zoomed in (or for the selected truck); badges carry the number.
+    const syncLabels = () => el.current?.classList.toggle("show-truck-labels", map.getZoom() >= 8.6);
+    map.on("zoom", syncLabels);
+    syncLabels();
     // Tiles are optional decoration: if they fail, keep the self-contained base map quietly.
     map.on("error", () => undefined);
 
-    const truckEls = new Map<string, { marker: maplibregl.Marker; el: HTMLDivElement }>();
+    const truckEls = new Map<string, { marker: maplibregl.Marker; el: HTMLDivElement; arrow: HTMLSpanElement }>();
     let lastMinute = -1;
 
     map.on("load", () => {
@@ -203,13 +207,13 @@ export default function MoldovaMap() {
         const div = document.createElement("div");
         div.className = "truck-marker";
         div.style.setProperty("--c", t.color);
-        div.innerHTML = `<div class="truck-dot">${t.number}</div><div class="truck-label">${t.label}</div>`;
+        div.innerHTML = `<div class="truck-dot"><span class="truck-arrow"></span>${t.number}</div><div class="truck-label">${t.label}</div>`;
         div.addEventListener("click", (e) => {
           e.stopPropagation();
           useUi.getState().select({ kind: "truck", id: t.id });
         });
         const marker = new maplibregl.Marker({ element: div }).setLngLat(WAREHOUSE).addTo(map);
-        truckEls.set(t.id, { marker, el: div });
+        truckEls.set(t.id, { marker, el: div, arrow: div.querySelector(".truck-arrow") as HTMLSpanElement });
       });
     }
     const unsubFleet = useUi.subscribe((s, prev) => {
@@ -235,6 +239,9 @@ export default function MoldovaMap() {
           ref.el.classList.toggle("is-home", !away);
           ref.el.classList.toggle("is-selected", selection?.kind === "truck" && selection.id === tr.id);
           ref.el.classList.toggle("is-unloading", st.status === "unloading");
+          const moving = st.status === "driving" || st.status === "returning";
+          ref.el.classList.toggle("is-moving", moving);
+          if (moving) ref.arrow.style.transform = `rotate(${st.bearing - map.getBearing()}deg)`;
         });
         const minute = Math.floor(t);
         if (minute !== lastMinute) {
