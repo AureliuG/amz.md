@@ -1,22 +1,23 @@
 "use client";
 
-import { Check, ChevronRight, ClipboardList, PackageCheck, PackageOpen, Phone, Truck as TruckIcon } from "lucide-react";
+import { Check, ChevronRight, ClipboardList, Minus, PackageCheck, PackageOpen, Phone, Plus, Truck as TruckIcon } from "lucide-react";
 import { useState } from "react";
-import { DOCK_COUNT, INSTITUTION_BY_ID, PIPELINE, PRODUCTS, TRUCKS } from "@/lib/seed";
+import { DOCK_COUNT, INSTITUTION_BY_ID, MAX_TRUCKS, PIPELINE, PRODUCTS } from "@/lib/seed";
 import { STATUS_LABEL, STATUS_TONE, fmtTime, truckState } from "@/lib/sim";
-import { useMinute, useUi } from "@/lib/store";
-import { StockList } from "./DetailPanel";
+import { useMinute, useTrucks, useUi } from "@/lib/store";
+import { StockList, TruckBadge } from "./DetailPanel";
 import { Bar, Card, Chip } from "./ui";
 
 /** Tracking strip for the selected truck (or the most interesting one right now). */
 export function TrackingPanel() {
   const t = useMinute();
+  const trucks = useTrucks();
   const sel = useUi((s) => s.selection);
   const select = useUi((s) => s.select);
   const truck =
-    (sel?.kind === "truck" && TRUCKS.find((x) => x.id === sel.id)) ||
-    TRUCKS.find((x) => ["loading", "departing", "driving", "unloading"].includes(truckState(x, t).status)) ||
-    TRUCKS[0];
+    (sel?.kind === "truck" && trucks.find((x) => x.id === sel.id)) ||
+    trucks.find((x) => ["loading", "departing", "driving", "unloading"].includes(truckState(x, t).status)) ||
+    trucks[0];
   const st = truckState(truck, t);
   const idx = Math.min(st.stopIdx, truck.stops.length - 1);
   const stop = truck.stops[idx];
@@ -24,27 +25,27 @@ export function TrackingPanel() {
   const prevLeave = idx === 0 ? truck.departAt : truck.stops[idx - 1].leaveAt;
 
   const steps = [
-    { icon: Phone, label: "Ordered", time: `${stop.orderedDaysAgo}d ago`, done: true },
-    { icon: ClipboardList, label: "Picked", time: fmtTime(truck.loadStart - 25), done: t >= truck.loadStart - 25 },
-    { icon: PackageCheck, label: st.status === "loading" ? `Loading ${Math.round(st.progress * 100)}%` : "Loaded", time: fmtTime(truck.departAt), done: t >= truck.departAt, active: st.status === "loading" },
-    { icon: TruckIcon, label: "In transit", time: fmtTime(prevLeave), done: t >= stop.arriveAt, active: t >= prevLeave && t < stop.arriveAt },
-    { icon: PackageOpen, label: t >= stop.arriveAt && t < stop.leaveAt ? "Unloading" : "Delivered", time: `${t >= stop.leaveAt ? "" : "ETA "}${fmtTime(stop.leaveAt)}`, done: t >= stop.leaveAt, active: t >= stop.arriveAt && t < stop.leaveAt },
+    { icon: Phone, label: "Comandat", time: `acum ${stop.orderedDaysAgo} z`, done: true },
+    { icon: ClipboardList, label: "Pregătit", time: fmtTime(truck.loadStart - 25), done: t >= truck.loadStart - 25 },
+    { icon: PackageCheck, label: st.status === "loading" ? `Încărcare ${Math.round(st.progress * 100)}%` : "Încărcat", time: fmtTime(truck.departAt), done: t >= truck.departAt, active: st.status === "loading" },
+    { icon: TruckIcon, label: "Pe drum", time: fmtTime(prevLeave), done: t >= stop.arriveAt, active: t >= prevLeave && t < stop.arriveAt },
+    { icon: PackageOpen, label: t >= stop.arriveAt && t < stop.leaveAt ? "Descărcare" : "Livrat", time: `${t >= stop.leaveAt ? "" : "~"}${fmtTime(stop.leaveAt)}`, done: t >= stop.leaveAt, active: t >= stop.arriveAt && t < stop.leaveAt },
   ];
 
   return (
     <Card className="pointer-events-auto hidden w-[640px] max-w-[calc(100vw-32px)] p-3 sm:block">
       <div className="mb-2 flex items-center justify-between text-[12px]">
         <span className="flex items-center gap-1.5 font-semibold text-slate-800">
-          <TruckIcon size={14} className="text-blue-600" /> Delivery tracking
+          <TruckIcon size={14} className="text-blue-600" /> Urmărirea livrării
         </span>
-        <span className="text-[10.5px] text-slate-400">
-          {truck.plate} · stop {idx + 1}/{truck.stops.length}
+        <span className="flex items-center gap-1.5 text-[10.5px] text-slate-400">
+          <TruckBadge truck={truck} size={16} /> {truck.label} · oprirea {idx + 1}/{truck.stops.length}
         </span>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <ol className="flex flex-1 items-start">
           {steps.map((s, i) => (
-            <li key={s.label} className="relative flex flex-1 flex-col items-center text-center">
+            <li key={i} className="relative flex flex-1 flex-col items-center text-center">
               {i > 0 && <span className={`absolute right-1/2 top-3.5 h-0.5 w-full ${s.done || s.active ? "bg-blue-500" : "bg-slate-200"}`} />}
               <span className={`relative z-10 grid h-7 w-7 place-items-center rounded-full ring-4 ring-white ${s.done ? "bg-blue-600 text-white" : s.active ? "bg-blue-100 text-blue-700 ring-blue-50" : "bg-slate-100 text-slate-400"}`}>{s.done ? <Check size={13} /> : <s.icon size={13} />}</span>
               <span className="mt-1 text-[10.5px] font-medium text-slate-700">{s.label}</span>
@@ -72,13 +73,15 @@ type Tab = "trucks" | "docks" | "stock" | "orders";
 export function FleetPanel() {
   const [tab, setTab] = useState<Tab>("trucks");
   const t = useMinute();
+  const trucks = useTrucks();
+  const setTruckCount = useUi((s) => s.setTruckCount);
   const select = useUi((s) => s.select);
   const low = PRODUCTS.filter((p) => p.stock < p.min).length;
   const tabs: [Tab, string][] = [
-    ["trucks", `Trucks ${TRUCKS.length}`],
-    ["docks", `Docks ${DOCK_COUNT}`],
-    ["stock", `Stock${low ? ` · ${low}⚠` : ""}`],
-    ["orders", "Orders"],
+    ["trucks", `Mașini ${trucks.length}`],
+    ["docks", `Rampe ${DOCK_COUNT}`],
+    ["stock", `Stoc${low ? ` · ${low}⚠` : ""}`],
+    ["orders", "Comenzi"],
   ];
   return (
     <Card className="pointer-events-auto w-[400px] max-w-[calc(100vw-32px)] overflow-hidden">
@@ -90,39 +93,53 @@ export function FleetPanel() {
         ))}
       </div>
       <div className="max-h-[230px] overflow-y-auto px-2 py-1">
-        {tab === "trucks" &&
-          TRUCKS.map((tr) => {
-            const st = truckState(tr, t);
-            return (
-              <button key={tr.id} onClick={() => select({ kind: "truck", id: tr.id })} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left hover:bg-slate-50">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tr.color }} />
-                <span className="w-[62px] shrink-0 text-[11.5px] font-semibold text-slate-800">{tr.plate}</span>
-                <span className="min-w-0 flex-1 truncate text-[10.5px] text-slate-500">{tr.region}</span>
-                <Chip tone={STATUS_TONE[st.status]}>{STATUS_LABEL[st.status]}</Chip>
-                <span className="w-[52px] shrink-0">
-                  <Bar value={st.delivered / tr.stops.length} tone="green" />
-                  <span className="block text-right text-[9.5px] tabular-nums text-slate-400">
-                    {st.delivered}/{tr.stops.length}
+        {tab === "trucks" && (
+          <>
+            {trucks.map((tr) => {
+              const st = truckState(tr, t);
+              return (
+                <button key={tr.id} onClick={() => select({ kind: "truck", id: tr.id })} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left hover:bg-slate-50">
+                  <TruckBadge truck={tr} />
+                  <span className="w-[66px] shrink-0 text-[11.5px] font-semibold text-slate-800">{tr.label}</span>
+                  <span className="min-w-0 flex-1 truncate text-[10.5px] text-slate-500">{tr.region}</span>
+                  <Chip tone={STATUS_TONE[st.status]}>{STATUS_LABEL[st.status]}</Chip>
+                  <span className="w-[44px] shrink-0">
+                    <Bar value={st.delivered / tr.stops.length} tone="green" />
+                    <span className="block text-right text-[9.5px] tabular-nums text-slate-400">
+                      {st.delivered}/{tr.stops.length}
+                    </span>
                   </span>
-                </span>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+            <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-1.5 pb-1 pt-2">
+              <span className="text-[10.5px] text-slate-400">Traseele se replanifică automat.</span>
+              <span className="flex gap-1">
+                <button disabled={trucks.length <= 1} onClick={() => setTruckCount(trucks.length - 1)} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                  <Minus size={12} /> Elimină
+                </button>
+                <button disabled={trucks.length >= MAX_TRUCKS} onClick={() => setTruckCount(trucks.length + 1)} className="flex items-center gap-1 rounded-lg bg-blue-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-40">
+                  <Plus size={12} /> Adaugă mașină
+                </button>
+              </span>
+            </div>
+          </>
+        )}
         {tab === "docks" &&
           Array.from({ length: DOCK_COUNT }, (_, i) => {
-            const now = TRUCKS.find((x) => x.dock === i + 1 && t >= x.loadStart && t < x.departAt);
-            const nextT = TRUCKS.filter((x) => x.dock === i + 1 && x.loadStart > t).sort((a, b) => a.loadStart - b.loadStart)[0];
+            const now = trucks.find((x) => x.dock === i + 1 && t >= x.loadStart && t < x.departAt);
+            const nextT = trucks.filter((x) => x.dock === i + 1 && x.loadStart > t).sort((a, b) => a.loadStart - b.loadStart)[0];
             return (
               <button key={i} onClick={() => select({ kind: "dock", id: i + 1 })} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left hover:bg-slate-50">
-                <span className="w-8 text-[11.5px] font-semibold text-slate-800">D{i + 1}</span>
-                <span className="flex-1 text-[11px] text-slate-500">{now ? now.plate : nextT ? `Next: ${nextT.plate} at ${fmtTime(nextT.loadStart)}` : "No trucks planned"}</span>
+                <span className="w-8 text-[11.5px] font-semibold text-slate-800">R{i + 1}</span>
+                <span className="flex-1 text-[11px] text-slate-500">{now ? now.label : nextT ? `Următoarea: ${nextT.label} la ${fmtTime(nextT.loadStart)}` : "Nicio mașină planificată"}</span>
                 {now ? (
                   <>
-                    <Chip tone="amber">Loading</Chip>
+                    <Chip tone="amber">Se încarcă</Chip>
                     <Bar value={truckState(now, t).progress} tone="amber" className="w-12" />
                   </>
                 ) : (
-                  <Chip tone="green">Free</Chip>
+                  <Chip tone="green">Liberă</Chip>
                 )}
               </button>
             );
@@ -130,13 +147,13 @@ export function FleetPanel() {
         {tab === "stock" && <StockList items={[...PRODUCTS].sort((a, b) => a.stock / a.min - b.stock / b.min)} />}
         {tab === "orders" && (
           <div className="py-1">
-            <p className="px-1.5 pb-2 text-[11px] text-slate-500">Orders taken by phone and entered in 1C, delivered 1–3 days later.</p>
+            <p className="px-1.5 pb-2 text-[11px] text-slate-500">Comenzi primite la telefon și introduse în 1C, livrate peste 1–3 zile.</p>
             {PIPELINE.map((p) => (
               <div key={p.label} className="flex items-center gap-2 px-1.5 py-1.5 text-[11.5px]">
-                <span className="w-20 font-medium text-slate-700">{p.label}</span>
+                <span className="w-24 font-medium text-slate-700">{p.label}</span>
                 <Bar value={p.orders / 160} className="flex-1" />
-                <span className="w-24 text-right tabular-nums text-slate-500">
-                  {p.orders} orders · {(p.kg / 1000).toFixed(1)} t
+                <span className="w-28 text-right tabular-nums text-slate-500">
+                  {p.orders} comenzi · {(p.kg / 1000).toFixed(1)} t
                 </span>
               </div>
             ))}

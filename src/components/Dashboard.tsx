@@ -10,7 +10,7 @@ import { Kpis } from "./hud/Kpis";
 import { TopBar } from "./hud/TopBar";
 
 // WebGL views can't render on the server: load them in the browser only.
-const Loading = () => <div className="grid h-full place-items-center text-[12px] text-slate-400">Loading…</div>;
+const Loading = () => <div className="grid h-full place-items-center text-[12px] text-slate-400">Se încarcă…</div>;
 const WarehouseScene = dynamic(() => import("./scene/WarehouseScene"), { ssr: false, loading: Loading });
 const MoldovaMap = dynamic(() => import("./map/MoldovaMap"), { ssr: false, loading: Loading });
 
@@ -44,17 +44,17 @@ function ViewControls() {
   const btn = "grid h-8 w-8 place-items-center text-slate-600 hover:bg-slate-50 hover:text-blue-700";
   return (
     <div className="pointer-events-auto flex flex-col overflow-hidden rounded-xl border border-white/70 bg-white/90 shadow-[0_8px_30px_-12px_rgba(31,63,179,0.25)]">
-      <button aria-label="Zoom in" className={btn} onClick={() => camera("in")}>
+      <button aria-label="Mărește" className={btn} onClick={() => camera("in")}>
         <Plus size={15} />
       </button>
-      <button aria-label="Zoom out" className={btn} onClick={() => camera("out")}>
+      <button aria-label="Micșorează" className={btn} onClick={() => camera("out")}>
         <Minus size={15} />
       </button>
-      <button aria-label="Reset view" className={btn} onClick={() => camera("reset")}>
+      <button aria-label="Vedere inițială" className={btn} onClick={() => camera("reset")}>
         <RotateCcw size={14} />
       </button>
       {view === "warehouse" && (
-        <button aria-label={roofOff ? "Show roof" : "See inside"} title={roofOff ? "Show roof" : "See inside"} className={`${btn} ${roofOff ? "text-blue-700" : ""}`} onClick={toggleRoof}>
+        <button aria-label={roofOff ? "Arată acoperișul" : "Vezi înăuntru"} title={roofOff ? "Arată acoperișul" : "Vezi înăuntru"} className={`${btn} ${roofOff ? "text-blue-700" : ""}`} onClick={toggleRoof}>
           {roofOff ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
       )}
@@ -65,6 +65,7 @@ function ViewControls() {
 export function Dashboard() {
   useClock();
   const view = useUi((s) => s.view);
+  useEffect(() => useUi.getState().loadSavedFleet(), []);
   // Both views stay mounted once opened, so switching is instant and WebGL contexts aren't torn down.
   const [mapOpened, setMapOpened] = useState(false);
   useEffect(() => {
@@ -74,7 +75,7 @@ export function Dashboard() {
     <div className="flex h-dvh flex-col">
       <TopBar />
       <main className="relative flex-1 overflow-hidden">
-        <div className={`absolute inset-0 ${view === "warehouse" ? "" : "invisible"}`}>
+        <div className={`absolute inset-0 isolate ${view === "warehouse" ? "" : "invisible"}`}>
           <WarehouseScene />
         </div>
         {mapOpened && (
@@ -83,7 +84,7 @@ export function Dashboard() {
           </div>
         )}
         {/* HUD: the overlay never blocks the scene except where panels are */}
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between gap-3 p-3 sm:p-4">
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between gap-3 p-3 sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <Kpis />
             <div className="flex items-start gap-2">

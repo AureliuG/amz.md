@@ -1,14 +1,14 @@
 "use client";
 
-import { Building2, MapPin, Package, Phone, Truck as TruckIcon, Warehouse, X } from "lucide-react";
-import { INSTITUTION_BY_ID, PRODUCT_BY_ID, PRODUCTS, TRUCKS } from "@/lib/seed";
+import { Building2, FileText, MapPin, Package, Phone, Warehouse, X } from "lucide-react";
+import { INSTITUTION_BY_ID, PRODUCT_BY_ID, PRODUCTS } from "@/lib/seed";
 import { STATUS_LABEL, STATUS_TONE, fmtDur, fmtTime, isOnTime, stopStatus, truckState } from "@/lib/sim";
-import { useMinute, useUi } from "@/lib/store";
-import type { InstitutionType, Selection, StorageZone } from "@/lib/types";
+import { useMinute, useTrucks, useUi } from "@/lib/store";
+import type { InstitutionType, Selection, StorageZone, Truck } from "@/lib/types";
 import { Bar, Card, Chip, Row } from "./ui";
 
-const TYPE_LABEL: Record<InstitutionType, string> = { kindergarten: "Kindergarten", school: "School", hospital: "Hospital", prison: "Penitentiary", social: "Social care" };
-const ZONE_LABEL: Record<StorageZone | "office", string> = { cellar: "Underground depot", cold: "Cold room", dry: "Dry goods racks", office: "Office" };
+const TYPE_LABEL: Record<InstitutionType, string> = { kindergarten: "Grădiniță", school: "Școală", hospital: "Spital", prison: "Penitenciar", social: "Asistență socială" };
+const ZONE_LABEL: Record<StorageZone | "office", string> = { cellar: "Depozit subteran", cold: "Cameră frigorifică", dry: "Rafturi produse uscate", office: "Oficiu" };
 
 export function DetailPanel() {
   const sel = useUi((s) => s.selection);
@@ -17,7 +17,7 @@ export function DetailPanel() {
   return (
     <Card className="pointer-events-auto w-[320px] max-w-[calc(100vw-32px)] overflow-hidden">
       <div className="max-h-[calc(100vh-300px)] overflow-y-auto p-4">
-        <button aria-label="Close" onClick={() => select(null)} className="float-right grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+        <button aria-label="Închide" onClick={() => select(null)} className="float-right grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700">
           <X size={14} />
         </button>
         <Body sel={sel} />
@@ -39,46 +39,58 @@ function Header({ icon, kicker, title, sub }: { icon: React.ReactNode; kicker: s
   );
 }
 
+/** Small numbered badge in the truck's colour, used wherever a truck is mentioned. */
+export function TruckBadge({ truck, size = 20 }: { truck: Truck; size?: number }) {
+  return (
+    <span className="grid shrink-0 place-items-center rounded-md font-bold text-white" style={{ background: truck.color, width: size, height: size, fontSize: size * 0.5 }}>
+      {truck.number}
+    </span>
+  );
+}
+
 function Body({ sel }: { sel: NonNullable<Selection> }) {
   const t = useMinute();
+  const trucks = useTrucks();
   const select = useUi((s) => s.select);
 
   if (sel.kind === "truck") {
-    const tr = TRUCKS.find((x) => x.id === sel.id)!;
+    const tr = trucks.find((x) => x.id === sel.id);
+    if (!tr) return null;
     const st = truckState(tr, t);
     const next = tr.stops[st.stopIdx];
     const nextInst = next && INSTITUTION_BY_ID.get(next.institutionId);
     const load = tr.stops.reduce((a, s) => a + s.weightKg, 0);
     return (
       <>
-        <Header icon={<TruckIcon size={20} />} kicker={`Truck · ${tr.region}`} title={tr.plate} sub={`${tr.driver} · ${tr.model}`} />
+        <Header icon={<TruckBadge truck={tr} size={40} />} kicker={`Mașină · ${tr.region}`} title={tr.label} sub={`${tr.driver} · ${tr.model}`} />
         <div className="mb-2 flex items-center gap-2">
           <Chip tone={STATUS_TONE[st.status]}>{STATUS_LABEL[st.status]}</Chip>
           <span className="truncate text-[11px] text-slate-500">
-            {st.status === "loading" && `Dock D${tr.dock} · departs ${fmtTime(tr.departAt)}`}
-            {(st.status === "driving" || st.status === "departing") && nextInst && `To ${nextInst.name}`}
-            {st.status === "unloading" && nextInst && `At ${nextInst.name}`}
-            {st.status === "parked" && `Loading starts ${fmtTime(tr.loadStart)}`}
-            {(st.status === "returning" || st.status === "arriving") && `Back at ${fmtTime(tr.returnAt)}`}
-            {st.status === "done" && `Returned ${fmtTime(tr.returnAt)}`}
+            {st.status === "loading" && `Rampa R${tr.dock} · pleacă la ${fmtTime(tr.departAt)}`}
+            {(st.status === "driving" || st.status === "departing") && nextInst && `Spre ${nextInst.name}`}
+            {st.status === "unloading" && nextInst && `La ${nextInst.name}`}
+            {st.status === "parked" && `Încărcarea începe la ${fmtTime(tr.loadStart)}`}
+            {(st.status === "returning" || st.status === "arriving") && `Revine la ${fmtTime(tr.returnAt)}`}
+            {st.status === "done" && `A revenit la ${fmtTime(tr.returnAt)}`}
           </span>
         </div>
         <Bar value={st.delivered / tr.stops.length} tone="green" />
         <div className="mb-2 mt-1 text-right text-[10.5px] text-slate-500">
-          {st.delivered}/{tr.stops.length} stops delivered
+          {st.delivered}/{tr.stops.length} opriri livrate
         </div>
-        <Row k="Load" v={`${load} kg / ${tr.capacityKg} kg`} />
-        <Row k="Route" v={`${tr.totalKm} km · ${fmtTime(tr.departAt)}–${fmtTime(tr.returnAt)}`} />
-        {next && st.status !== "done" && <Row k="Next ETA" v={`${fmtTime(next.arriveAt)} (${fmtDur(next.arriveAt - t)})`} />}
+        <Row k="Nr. înmatriculare" v={tr.plate || <span className="text-slate-400">de completat</span>} />
+        <Row k="Încărcătură" v={`${load} kg / ${tr.capacityKg} kg`} />
+        <Row k="Traseu" v={`${tr.totalKm} km · ${fmtTime(tr.departAt)}–${fmtTime(tr.returnAt)}`} />
+        {next && st.status !== "done" && <Row k="Următoarea sosire" v={`${fmtTime(next.arriveAt)} (${fmtDur(next.arriveAt - t)})`} />}
         <Row
-          k="Driver"
+          k="Șofer"
           v={
             <a href={`tel:${tr.phone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1 text-blue-600">
               <Phone size={11} /> {tr.phone}
             </a>
           }
         />
-        <div className="mt-3 text-[11px] font-semibold text-slate-700">Stops</div>
+        <div className="mt-3 text-[11px] font-semibold text-slate-700">Opriri</div>
         <ol className="mt-1 space-y-1">
           {tr.stops.map((s, i) => {
             const inst = INSTITUTION_BY_ID.get(s.institutionId)!;
@@ -105,9 +117,11 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
 
   if (sel.kind === "institution") {
     const inst = INSTITUTION_BY_ID.get(sel.id)!;
-    let found: { tr: (typeof TRUCKS)[number]; i: number } | null = null;
-    TRUCKS.forEach((tr) => tr.stops.forEach((s, i) => s.institutionId === inst.id && (found = { tr, i })));
-    const f = found as { tr: (typeof TRUCKS)[number]; i: number } | null;
+    let f: { tr: Truck; i: number } | null = null;
+    for (const tr of trucks) {
+      const i = tr.stops.findIndex((s) => s.institutionId === inst.id);
+      if (i >= 0) f = { tr, i };
+    }
     const stop = f?.tr.stops[f.i];
     const ss = f ? stopStatus(f.tr, f.i, t) : null;
     return (
@@ -116,14 +130,29 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
         {f && stop ? (
           <>
             <div className="mb-2 flex items-center gap-2">
-              <Chip tone={ss === "delivered" ? "green" : ss === "unloading" ? "amber" : "blue"}>{ss === "delivered" ? "Delivered" : ss === "unloading" ? "Unloading now" : ss === "next" ? "Truck on the way" : "Planned today"}</Chip>
+              <Chip tone={ss === "delivered" ? "green" : ss === "unloading" ? "amber" : "blue"}>{ss === "delivered" ? "Livrat" : ss === "unloading" ? "Se descarcă acum" : ss === "next" ? "Mașina e pe drum" : "Planificat azi"}</Chip>
               <span className="text-[11px] text-slate-500">{stop.orderNo}</span>
             </div>
-            <Row k="Truck" v={<button className="text-blue-600" onClick={() => select({ kind: "truck", id: f.tr.id })}>{f.tr.plate}</button>} />
-            <Row k="Planned arrival" v={fmtTime(stop.arriveAt)} />
-            <Row k="Deliver before" v={<span className={isOnTime(stop) ? "" : "text-rose-600"}>{fmtTime(inst.windowEnd)}</span>} />
-            <Row k="Ordered" v={`${stop.orderedDaysAgo} day${stop.orderedDaysAgo > 1 ? "s" : ""} ago (by phone → 1C)`} />
-            <div className="mt-3 text-[11px] font-semibold text-slate-700">Order · {stop.weightKg} kg</div>
+            <Row
+              k="Mașina"
+              v={
+                <button className="inline-flex items-center gap-1.5 text-blue-600" onClick={() => select({ kind: "truck", id: f.tr.id })}>
+                  <TruckBadge truck={f.tr} size={16} /> {f.tr.label}
+                </button>
+              }
+            />
+            <Row k="Sosire planificată" v={fmtTime(stop.arriveAt)} />
+            <Row k="Termen" v={<span className={isOnTime(stop) ? "" : "text-rose-600"}>până la {fmtTime(inst.windowEnd)}</span>} />
+            <Row k="Comandat" v={`acum ${stop.orderedDaysAgo} ${stop.orderedDaysAgo > 1 ? "zile" : "zi"} (telefon → 1C)`} />
+            <Row
+              k="Document"
+              v={
+                <span className="inline-flex items-center gap-1">
+                  <FileText size={11} /> Factură
+                </span>
+              }
+            />
+            <div className="mt-3 text-[11px] font-semibold text-slate-700">Comanda · {stop.weightKg} kg</div>
             <ul className="mt-1 divide-y divide-slate-100">
               {stop.lines.map((l) => {
                 const p = PRODUCT_BY_ID.get(l.productId)!;
@@ -132,7 +161,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
                     <span className="h-3 w-3 rounded" style={{ background: p.color, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.08)" }} />
                     <span className="flex-1 text-slate-700">{p.name}</span>
                     <span className="tabular-nums text-slate-500">
-                      {l.qty} {p.unit}
+                      {l.qty} {p.unit === "pcs" ? "buc" : p.unit}
                     </span>
                   </li>
                 );
@@ -140,7 +169,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
             </ul>
           </>
         ) : (
-          <p className="text-[12px] text-slate-500">No delivery scheduled today.</p>
+          <p className="text-[12px] text-slate-500">Nicio livrare programată azi.</p>
         )}
         <div className="mt-3 flex items-center gap-1 text-[10.5px] text-slate-400">
           <MapPin size={11} /> {inst.pos[1].toFixed(4)}, {inst.pos[0].toFixed(4)}
@@ -150,20 +179,20 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
   }
 
   if (sel.kind === "dock") {
-    const trucks = TRUCKS.filter((x) => x.dock === sel.id);
-    const now = trucks.find((x) => t >= x.loadStart && t < x.departAt);
+    const atDock = trucks.filter((x) => x.dock === sel.id);
+    const now = atDock.find((x) => t >= x.loadStart && t < x.departAt);
     return (
       <>
-        <Header icon={<Warehouse size={20} />} kicker="Front entrance" title={`Dock D${sel.id}`} sub={now ? `Loading ${now.plate}` : "Free"} />
+        <Header icon={<Warehouse size={20} />} kicker="Intrarea principală" title={`Rampa R${sel.id}`} sub={now ? `Se încarcă ${now.label}` : "Liberă"} />
         {now && (
           <>
             <Bar value={truckState(now, t).progress} tone="amber" />
-            <div className="mb-2 mt-1 text-right text-[10.5px] text-slate-500">departs {fmtTime(now.departAt)}</div>
+            <div className="mb-2 mt-1 text-right text-[10.5px] text-slate-500">pleacă la {fmtTime(now.departAt)}</div>
           </>
         )}
-        <div className="text-[11px] font-semibold text-slate-700">Today at this dock</div>
-        {trucks.map((x) => (
-          <Row key={x.id} k={`${fmtTime(x.loadStart)}–${fmtTime(x.departAt)}`} v={<button className="text-blue-600" onClick={() => select({ kind: "truck", id: x.id })}>{x.plate}</button>} />
+        <div className="text-[11px] font-semibold text-slate-700">Azi la această rampă</div>
+        {atDock.map((x) => (
+          <Row key={x.id} k={`${fmtTime(x.loadStart)}–${fmtTime(x.departAt)}`} v={<button className="text-blue-600" onClick={() => select({ kind: "truck", id: x.id })}>{x.label}</button>} />
         ))}
       </>
     );
@@ -173,15 +202,15 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
     if (sel.id === "office") {
       return (
         <>
-          <Header icon={<Building2 size={20} />} kicker="Warehouse" title="Office" sub="Dispatch & order entry (1C)" />
-          <p className="text-[12px] text-slate-500">Orders taken by phone are entered in 1C here. Once 1C is connected, they will appear in DepotOps automatically.</p>
+          <Header icon={<Building2 size={20} />} kicker="Depozit" title="Oficiu" sub="Dispecerat și introducerea comenzilor (1C)" />
+          <p className="text-[12px] text-slate-500">Comenzile primite la telefon se introduc aici în 1C. După conectarea la 1C, vor apărea automat în aplicație.</p>
         </>
       );
     }
     const items = PRODUCTS.filter((p) => p.zone === sel.id);
     return (
       <>
-        <Header icon={<Package size={20} />} kicker="Storage zone" title={ZONE_LABEL[sel.id]} sub={`${items.length} products`} />
+        <Header icon={<Package size={20} />} kicker="Zonă de depozitare" title={ZONE_LABEL[sel.id]} sub={`${items.length} produse`} />
         <StockList items={items} />
       </>
     );
@@ -189,11 +218,11 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
 
   return (
     <>
-      <Header icon={<Warehouse size={20} />} kicker="Chișinău" title="Main warehouse" sub="Front entrance · 6 docks" />
-      <Row k="Trucks" v={TRUCKS.length} />
-      <Row k="Products" v={PRODUCTS.length} />
+      <Header icon={<Warehouse size={20} />} kicker="Nobil Prest" title="Depozitul central" sub="Intrarea principală · 6 rampe" />
+      <Row k="Mașini" v={trucks.length} />
+      <Row k="Produse" v={PRODUCTS.length} />
       <button onClick={() => useUi.getState().setView("warehouse")} className="mt-3 w-full rounded-lg bg-blue-600 py-2 text-[12px] font-medium text-white hover:bg-blue-700">
-        Open 3D warehouse
+        Deschide depozitul 3D
       </button>
     </>
   );
@@ -210,9 +239,9 @@ export function StockList({ items }: { items: typeof PRODUCTS }) {
               <span className="h-3 w-3 rounded" style={{ background: p.color, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.08)" }} />
               <span className="flex-1 text-slate-700">{p.name}</span>
               <span className="tabular-nums text-slate-800">
-                {p.stock.toLocaleString("ro-MD")} {p.unit}
+                {p.stock.toLocaleString("ro-MD")} {p.unit === "pcs" ? "buc" : p.unit}
               </span>
-              <Chip tone={low ? "amber" : "green"}>{low ? "Low" : "OK"}</Chip>
+              <Chip tone={low ? "amber" : "green"}>{low ? "Redus" : "OK"}</Chip>
             </div>
             <Bar value={p.stock / (p.min * 3)} tone={low ? "amber" : "blue"} className="ml-5 mt-1" />
           </li>

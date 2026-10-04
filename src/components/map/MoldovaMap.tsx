@@ -5,10 +5,10 @@ import type { GeoJSONSource, LayerSpecification, Map as MLMap, StyleSpecificatio
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef } from "react";
 import { arcLine } from "@/lib/geo";
-import { INSTITUTION_BY_ID, INSTITUTIONS, TRUCKS, WAREHOUSE } from "@/lib/seed";
+import { INSTITUTION_BY_ID, INSTITUTIONS, WAREHOUSE } from "@/lib/seed";
 import { stopStatus, truckState } from "@/lib/sim";
 import { useUi } from "@/lib/store";
-import type { LngLat } from "@/lib/types";
+import type { LngLat, Truck } from "@/lib/types";
 
 /**
  * Self-contained pastel style: country shapes ship with the app, so the map always renders.
@@ -62,9 +62,9 @@ async function addStreetTiles(map: MLMap) {
 
 const fc = (features: GeoJSON.Feature[]): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features });
 
-function routeFeatures() {
+function routeFeatures(trucks: Truck[]) {
   return fc(
-    TRUCKS.map((t) => {
+    trucks.map((t) => {
       const pts: LngLat[] = [WAREHOUSE, ...t.stops.map((s) => INSTITUTION_BY_ID.get(s.institutionId)!.pos), WAREHOUSE];
       const line = pts.slice(1).flatMap((p, i) => arcLine(pts[i], p, 14));
       return { type: "Feature", properties: { id: t.id, color: t.color }, geometry: { type: "LineString", coordinates: line } };
@@ -72,9 +72,9 @@ function routeFeatures() {
   );
 }
 
-function institutionFeatures(t: number) {
+function institutionFeatures(trucks: Truck[], t: number) {
   const today = new Map<string, { status: string; truck: string; color: string }>();
-  TRUCKS.forEach((tr) => tr.stops.forEach((s, i) => today.set(s.institutionId, { status: stopStatus(tr, i, t), truck: tr.id, color: tr.color })));
+  trucks.forEach((tr) => tr.stops.forEach((s, i) => today.set(s.institutionId, { status: stopStatus(tr, i, t), truck: tr.id, color: tr.color })));
   return fc(
     INSTITUTIONS.map((inst) => {
       const d = today.get(inst.id);
@@ -108,10 +108,12 @@ export default function MoldovaMap() {
     map.on("error", () => undefined);
 
     const truckEls = new Map<string, { marker: maplibregl.Marker; el: HTMLDivElement }>();
+    let lastMinute = -1;
 
     map.on("load", () => {
-      map.addSource("routes", { type: "geojson", data: routeFeatures() });
-      map.addSource("insts", { type: "geojson", data: institutionFeatures(useUi.getState().t) });
+      const { trucks, t } = useUi.getState();
+      map.addSource("routes", { type: "geojson", data: routeFeatures(trucks) });
+      map.addSource("insts", { type: "geojson", data: institutionFeatures(trucks, t) });
       map.addLayer({ id: "routes-casing", type: "line", source: "routes", paint: { "line-color": "#ffffff", "line-width": 5, "line-opacity": 0.9 }, layout: { "line-cap": "round", "line-join": "round" } });
       map.addLayer({ id: "routes", type: "line", source: "routes", paint: { "line-color": ["get", "color"], "line-width": 2.2, "line-opacity": 0.75, "line-dasharray": [2, 1.5] }, layout: { "line-cap": "round" } });
       map.addLayer({
@@ -149,19 +151,27 @@ export default function MoldovaMap() {
       // Warehouse marker
       const wh = document.createElement("div");
       wh.className = "wh-marker";
-      wh.innerHTML = `<div class="wh-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8"/><path d="M7 17h10"/></svg></div><div class="wh-label">Main warehouse</div>`;
+      wh.innerHTML = `<div class="wh-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8"/><path d="M7 17h10"/></svg></div><div class="wh-label">Depozit Nobil Prest</div>`;
       wh.addEventListener("click", (e) => {
         e.stopPropagation();
         useUi.getState().select({ kind: "warehouse" });
       });
       new maplibregl.Marker({ element: wh, anchor: "bottom" }).setLngLat(WAREHOUSE).addTo(map);
 
-      // Truck markers
-      TRUCKS.forEach((t) => {
+      syncTrucks(useUi.getState().trucks);
+    });
+
+    /** (Re)creates the numbered truck markers and route lines, e.g. after a truck is added. */
+    function syncTrucks(trucks: Truck[]) {
+      truckEls.forEach(({ marker }) => marker.remove());
+      truckEls.clear();
+      (map.getSource("routes") as GeoJSONSource | undefined)?.setData(routeFeatures(trucks));
+      lastMinute = -1;
+      trucks.forEach((t) => {
         const div = document.createElement("div");
         div.className = "truck-marker";
         div.style.setProperty("--c", t.color);
-        div.innerHTML = `<div class="truck-dot"><svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M2 6h11v9H2zM13 9h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg></div><div class="truck-label">${t.plate}</div>`;
+        div.innerHTML = `<div class="truck-dot">${t.number}</div><div class="truck-label">${t.label}</div>`;
         div.addEventListener("click", (e) => {
           e.stopPropagation();
           useUi.getState().select({ kind: "truck", id: t.id });
@@ -169,6 +179,9 @@ export default function MoldovaMap() {
         const marker = new maplibregl.Marker({ element: div }).setLngLat(WAREHOUSE).addTo(map);
         truckEls.set(t.id, { marker, el: div });
       });
+    }
+    const unsubFleet = useUi.subscribe((s, prev) => {
+      if (s.trucks !== prev.trucks && map.getSource("routes")) syncTrucks(s.trucks);
     });
 
     map.on("click", (e) => {
@@ -177,11 +190,10 @@ export default function MoldovaMap() {
 
     // Animation: trucks every frame, institution colours once a sim-minute.
     let raf = 0;
-    let lastMinute = -1;
     const tick = () => {
-      const { t, selection } = useUi.getState();
+      const { t, selection, trucks } = useUi.getState();
       if (map.isStyleLoaded() || map.getSource("insts")) {
-        TRUCKS.forEach((tr) => {
+        trucks.forEach((tr) => {
           const ref = truckEls.get(tr.id);
           if (!ref) return;
           const st = truckState(tr, t);
@@ -194,7 +206,7 @@ export default function MoldovaMap() {
         const minute = Math.floor(t);
         if (minute !== lastMinute) {
           lastMinute = minute;
-          (map.getSource("insts") as GeoJSONSource | undefined)?.setData(institutionFeatures(t));
+          (map.getSource("insts") as GeoJSONSource | undefined)?.setData(institutionFeatures(trucks, t));
         }
       }
       raf = requestAnimationFrame(tick);
@@ -210,7 +222,8 @@ export default function MoldovaMap() {
       map.setPaintProperty("routes", "line-width", truckId ? ["case", ["==", ["get", "id"], truckId], 4, 2] : 2.2);
       map.setFilter("insts-selected", ["==", ["get", "id"], sel?.kind === "institution" ? sel.id : ""]);
       if (truckId) {
-        const tr = TRUCKS.find((x) => x.id === truckId)!;
+        const tr = s.trucks.find((x) => x.id === truckId);
+        if (!tr) return;
         const b = new maplibregl.LngLatBounds(WAREHOUSE, WAREHOUSE);
         tr.stops.forEach((st) => b.extend(INSTITUTION_BY_ID.get(st.institutionId)!.pos));
         map.fitBounds(b, { padding: { top: 140, bottom: 220, left: 80, right: 420 }, pitch: 45, duration: 900, maxZoom: 11 });
@@ -229,6 +242,7 @@ export default function MoldovaMap() {
       cancelAnimationFrame(raf);
       unsub();
       unsubCam();
+      unsubFleet();
       map.remove();
     };
   }, []);

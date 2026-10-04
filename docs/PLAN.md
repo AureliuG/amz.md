@@ -15,6 +15,12 @@ plans and tracks real deliveries.
   There are no pickups, no cash on delivery and no returns.
 - Drivers mostly use Android phones, and several use iPhones.
 - Stock is kept in the warehouse. First users: our own team, as an internal dashboard.
+- Company: **Nobil Prest**. The interface language is **Romanian**.
+- Trucks are identified by **number (Mașina 1–12)**, and more can be added. Models, plates and capacities will come later.
+- Some routes are **fixed**, others are **planned fresh each day** (details to come).
+- No delivery time windows: deliveries are due **by 18:00** on the delivery day.
+- No signatures. Each delivery comes with an **invoice (factură)** from 1C, so the driver app only needs
+  "delivered" plus an optional photo of the stamped invoice.
 
 **Status:** a clickable demo (phases 1 + 2 visuals + 4) with generated data is in `src/`.
 
@@ -120,16 +126,12 @@ so you can show it before the real integrations exist.
 
 ## 8. Open questions
 
-1. Exact warehouse address (the map pin is a placeholder in Chișinău).
-2. Exact number of trucks, plates, models and capacities (kg and pallets), and which are refrigerated.
-3. Are routes fixed per day of the week (e.g. Monday = North), or planned fresh each day?
-4. Do institutions have required delivery times (e.g. kindergartens before 10:00)?
-5. 1C: which configuration (Trade/UT, Accounting, custom), version, and who maintains it?
-   Can we get an export of orders, institutions (with addresses) and stock?
-6. Is there a list of the ~800 institutions with addresses and/or coordinates?
-7. Do drivers need paper documents (invoices, waybills) signed at delivery, or could they go digital?
-8. UI language for staff: Romanian, Russian, or both?
-9. Company name and logo for the app and the trucks.
+1. **Warehouse location**: the Google Maps short link can't be opened from the build environment.
+   Send the coordinates (long-press the pin in Google Maps and copy the two numbers) or the street address.
+2. Per truck: model, plate, capacity (kg/pallets), refrigerated or not, usual driver.
+3. Which routes are fixed (truck → weekday → institutions) and which are planned daily.
+4. 1C configuration and version, and whether an export of orders, institutions (with addresses) and stock is possible.
+5. The list of the ~800 institutions with addresses/coordinates.
 
 ## 9. Original discovery questions (answered above where known)
 

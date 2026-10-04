@@ -1,20 +1,21 @@
 "use client";
 
-import { CheckCircle2, Clock, Snowflake, Truck } from "lucide-react";
-import { PRODUCTS, TRUCKS } from "@/lib/seed";
+import { CheckCircle2, Clock, PackageX, Truck } from "lucide-react";
+import { PRODUCTS } from "@/lib/seed";
 import { fleetSummary } from "@/lib/sim";
-import { useMinute } from "@/lib/store";
+import { useMinute, useTrucks } from "@/lib/store";
 import { Card } from "./ui";
 
 export function Kpis() {
   const t = useMinute();
-  const f = fleetSummary(TRUCKS, t);
+  const trucks = useTrucks();
+  const f = fleetSummary(trucks, t);
   const low = PRODUCTS.filter((p) => p.stock < p.min).length;
   const items = [
-    { icon: CheckCircle2, label: "Delivered today", value: `${f.delivered}`, sub: `of ${f.planned} stops · ${(f.kgDelivered / 1000).toFixed(1)} t` },
-    { icon: Truck, label: "Trucks on the road", value: `${f.onRoad}`, sub: `${f.atWarehouse} at warehouse` },
-    { icon: Clock, label: "On-time", value: `${f.onTimePct.toFixed(1)}%`, sub: "within delivery window" },
-    { icon: Snowflake, label: "Low stock", value: `${low}`, sub: "products below minimum", warn: low > 0 },
+    { icon: CheckCircle2, label: "Livrate azi", value: `${f.delivered}`, sub: `din ${f.planned} opriri · ${(f.kgDelivered / 1000).toFixed(1)} t` },
+    { icon: Truck, label: "Mașini pe drum", value: `${f.onRoad}`, sub: `${f.atWarehouse} la depozit` },
+    { icon: Clock, label: "La timp", value: `${f.onTimePct.toFixed(1)}%`, sub: "livrate până la 18:00" },
+    { icon: PackageX, label: "Stoc redus", value: `${low}`, sub: "produse sub minim", warn: low > 0 },
   ];
   return (
     <div className="pointer-events-auto flex max-w-[calc(100vw-80px)] gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible">

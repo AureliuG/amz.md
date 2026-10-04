@@ -44,6 +44,10 @@ export interface Stop {
 
 export interface Truck {
   id: string;
+  /** Fleet number shown everywhere ("Mașina 3"). */
+  number: number;
+  label: string;
+  /** Registration plate; empty until the real fleet data is entered. */
   plate: string;
   model: string;
   refrigerated: boolean;

@@ -80,14 +80,14 @@ export function fleetSummary(trucks: Truck[], t: number) {
 }
 
 export const STATUS_LABEL: Record<TruckState["status"], string> = {
-  parked: "Parked",
-  loading: "Loading",
-  departing: "Leaving yard",
-  driving: "En route",
-  unloading: "Unloading",
-  returning: "Returning",
-  arriving: "Entering yard",
-  done: "Back · done",
+  parked: "Parcată",
+  loading: "Se încarcă",
+  departing: "Iese din curte",
+  driving: "Pe drum",
+  unloading: "Descarcă",
+  returning: "Se întoarce",
+  arriving: "Intră în curte",
+  done: "Revenită",
 };
 
 export const STATUS_TONE: Record<TruckState["status"], "blue" | "green" | "amber" | "gray" | "violet"> = {

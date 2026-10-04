@@ -6,9 +6,11 @@ import border from "./moldova-border.json";
 import { bearingDeg, haversineKm, pointInPolygon } from "./geo";
 import type { Institution, InstitutionType, LngLat, OrderLine, Product, Stop, Truck } from "./types";
 
-/** Warehouse location. Placeholder in Chișinău; replace with the real address. */
+/** Warehouse location. PLACEHOLDER in Chișinău until the real coordinates are provided. */
 export const WAREHOUSE: LngLat = [28.901, 47.0245];
 export const DOCK_COUNT = 6;
+/** Deliveries are due by 18:00 the delivery day (no per-institution windows). */
+export const DELIVER_BY = 18 * 60;
 export const BACK_DOCK_COUNT = 2;
 
 function rng(seed: number) {
@@ -91,7 +93,7 @@ function makeInstitutions(total: number): Institution[] {
   const prisonTowns = ["Chișinău", "Chișinău", "Soroca", "Hîncești", "Taraclia", "Orhei", "Bălți", "Criuleni"];
   prisonTowns.forEach((name, i) => {
     const town = TOWNS.find((t) => t[0] === name)!;
-    out.push({ id: `I${out.length + 1}`, name: `Penitenciarul nr. ${[13, 16, 6, 7, 3, 17, 11, 15][i]}`, type: "prison", town: name, pos: placeNear(town, 0.08), windowEnd: 14 * 60 });
+    out.push({ id: `I${out.length + 1}`, name: `Penitenciarul nr. ${[13, 16, 6, 7, 3, 17, 11, 15][i]}`, type: "prison", town: name, pos: placeNear(town, 0.08), windowEnd: DELIVER_BY });
   });
   while (out.length < total) {
     let r = rand() * weightSum;
@@ -115,8 +117,7 @@ function makeInstitutions(total: number): Institution[] {
       type,
       town: town[0],
       pos: placeNear(town, spread),
-      // Kindergartens need the food before lunch is cooked.
-      windowEnd: type === "kindergarten" ? 11 * 60 : type === "school" ? 12 * 60 : 14 * 60,
+      windowEnd: DELIVER_BY,
     });
   }
   return out;
@@ -157,24 +158,35 @@ const MODELS: [string, boolean, number][] = [
   ["MAN TGL · frigorific", true, 4500],
 ];
 const TRUCK_COLORS = ["#2f6bff", "#13a37f", "#f08a24", "#8d5cf6", "#e2483d", "#0aa5c2", "#d9a400", "#e0559b", "#4f8a10", "#5a6b8c", "#b5651d", "#3b3fb8"];
-const PLATE_LETTERS = ["KDT", "CMB", "BUX", "AGD", "TNL", "RRV", "CKN", "FLA", "OXM", "HPT", "SVR", "LIM"];
 
 const DWELL_MIN = 14;
 
-function buildRoutes(insts: Institution[]): Truck[] {
-  const withGeo = insts.map((i) => ({ i, d: haversineKm(WAREHOUSE, i.pos), b: bearingDeg(WAREHOUSE, i.pos) }));
-  // Trucks 1–3 serve Chișinău (split by direction); trucks 4–12 split the rest of the country.
+export const DEFAULT_TRUCK_COUNT = 12;
+export const MAX_TRUCKS = 24;
+
+const truckColor = (k: number) => (k < TRUCK_COLORS.length ? TRUCK_COLORS[k] : `hsl(${(k * 137) % 360} 65% 48%)`);
+
+/**
+ * Fleet and today's plan for `count` trucks, numbered 1..count. Chișinău gets about a quarter
+ * of the trucks (split by direction), the rest split the country by direction from the warehouse.
+ * Deterministic for a given count, so adding a truck re-plans the day the same way every time.
+ */
+export function buildFleet(count: number): Truck[] {
+  const r = rng(7000 + count);
+  const withGeo = INSTITUTIONS.map((i) => ({ i, d: haversineKm(WAREHOUSE, i.pos), b: bearingDeg(WAREHOUSE, i.pos) }));
+  const cityCount = Math.max(1, Math.round(count / 4));
   const city = withGeo.filter((x) => x.d < 14).sort((a, b) => a.b - b.b);
   const country = withGeo.filter((x) => x.d >= 14).sort((a, b) => a.b - b.b);
   const chunk = <T,>(arr: T[], n: number) => Array.from({ length: n }, (_, k) => arr.slice(Math.floor((k * arr.length) / n), Math.floor(((k + 1) * arr.length) / n)));
-  const sectors = [...chunk(city, 3), ...chunk(country, 9)];
+  const sectors = count === 1 ? [withGeo] : [...chunk(city, cityCount), ...chunk(country, count - cityCount)];
+  const cityDirs = ["nord", "est", "sud", "vest", "centru", "Botanica"];
 
   let orderSeq = 41870;
   return sectors.map((sector, k) => {
-    const isCity = k < 3;
+    const isCity = k < cityCount && count > 1;
     const want = isCity ? 15 : sector[0] && sector[0].d > 90 ? 9 : 11;
     // Today's stops: a compact cluster around a random institution of the sector.
-    const anchor = sector[Math.floor(rand() * sector.length)];
+    const anchor = sector[Math.floor(r() * sector.length)];
     const today = [...sector].sort((a, b) => haversineKm(a.i.pos, anchor.i.pos) - haversineKm(b.i.pos, anchor.i.pos)).slice(0, want).map((x) => x.i);
     // Nearest-neighbour ordering from the warehouse (VROOM will replace this).
     const ordered: Institution[] = [];
@@ -196,12 +208,12 @@ function buildRoutes(insts: Institution[]): Truck[] {
       const km = haversineKm(from, inst.pos) * 1.3;
       total += km;
       t += (km / speed) * 60;
-      const lines = makeLines(inst.type);
+      const lines = makeLines(inst.type, r);
       const weightKg = lines.reduce((sum, l) => sum + l.qty, 0);
       const arriveAt = t;
       t += DWELL_MIN + weightKg / 60;
       from = inst.pos;
-      return { id: `S${k + 1}-${s + 1}`, orderNo: `CMD-${orderSeq++}`, institutionId: inst.id, lines, weightKg: Math.round(weightKg), orderedDaysAgo: 1 + Math.floor(rand() * 3), arriveAt, leaveAt: t, distanceKm: km };
+      return { id: `S${k + 1}-${s + 1}`, orderNo: `CMD-${orderSeq++}`, institutionId: inst.id, lines, weightKg: Math.round(weightKg), orderedDaysAgo: 1 + Math.floor(r() * 3), arriveAt, leaveAt: t, distanceKm: km };
     });
     const backKm = haversineKm(from, WAREHOUSE) * 1.3;
     total += backKm;
@@ -209,15 +221,17 @@ function buildRoutes(insts: Institution[]): Truck[] {
     const regionTowns = [...new Set(ordered.map((o) => o.town))];
     return {
       id: `T${k + 1}`,
-      plate: `${PLATE_LETTERS[k]} ${100 + Math.floor(rand() * 899)}`,
+      number: k + 1,
+      label: `Mașina ${k + 1}`,
+      plate: "",
       model,
       refrigerated,
       capacityKg,
-      driver: DRIVERS[k],
-      phone: `+373 6${Math.floor(rand() * 9)} ${100 + Math.floor(rand() * 899)} ${100 + Math.floor(rand() * 899)}`,
-      color: TRUCK_COLORS[k],
+      driver: DRIVERS[k % DRIVERS.length],
+      phone: `+373 6${Math.floor(r() * 9)} ${100 + Math.floor(r() * 899)} ${100 + Math.floor(r() * 899)}`,
+      color: truckColor(k),
       dock: (k % DOCK_COUNT) + 1,
-      region: isCity ? `Chișinău · ${["north", "east", "west"][k]}` : regionTowns.slice(0, 2).join(", "),
+      region: isCity ? `Chișinău · ${cityDirs[k % cityDirs.length]}` : regionTowns.slice(0, 2).join(", "),
       loadStart: departAt - 45,
       departAt,
       returnAt,
@@ -227,21 +241,20 @@ function buildRoutes(insts: Institution[]): Truck[] {
   });
 }
 
-function makeLines(type: InstitutionType): OrderLine[] {
+function makeLines(type: InstitutionType, r: () => number): OrderLine[] {
   const scale = type === "prison" ? 6 : type === "hospital" ? 3.5 : type === "school" ? 2 : type === "social" ? 1.5 : 1;
-  const n = 5 + Math.floor(rand() * 5);
-  const chosen = [...PRODUCTS].sort(() => rand() - 0.5).slice(0, n);
-  return chosen.map((p) => ({ productId: p.id, qty: Math.round(between(4, 30) * scale) }));
+  const n = 5 + Math.floor(r() * 5);
+  const chosen = [...PRODUCTS].sort(() => r() - 0.5).slice(0, n);
+  return chosen.map((p) => ({ productId: p.id, qty: Math.round((4 + r() * 26) * scale) }));
 }
 
 export const INSTITUTIONS = makeInstitutions(800);
 export const INSTITUTION_BY_ID = new Map(INSTITUTIONS.map((i) => [i.id, i]));
-export const TRUCKS = buildRoutes(INSTITUTIONS);
 export const PRODUCT_BY_ID = new Map(PRODUCTS.map((p) => [p.id, p]));
 
 /** Orders already received from 1C for the next days (demo numbers). */
 export const PIPELINE = [
-  { label: "Tomorrow", orders: 152, kg: 18400 },
-  { label: "In 2 days", orders: 138, kg: 16900 },
-  { label: "In 3 days", orders: 61, kg: 7300 },
+  { label: "Mâine", orders: 152, kg: 18400 },
+  { label: "Poimâine", orders: 138, kg: 16900 },
+  { label: "Peste 3 zile", orders: 61, kg: 7300 },
 ];

@@ -4,18 +4,21 @@ import { Html, MapControls, OrthographicCamera } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Group } from "three";
-import { BACK_DOCK_COUNT, DOCK_COUNT, PRODUCTS, TRUCKS } from "@/lib/seed";
+import { BACK_DOCK_COUNT, DOCK_COUNT, PRODUCTS } from "@/lib/seed";
 import { STATUS_LABEL, truckState } from "@/lib/sim";
 import { useUi } from "@/lib/store";
 import type { Truck } from "@/lib/types";
-import { Box, ForkliftModel, Pallet, Tree, TruckModel } from "./models";
+import { Box, BrandSign, ForkliftModel, Pallet, Tree, TruckModel } from "./models";
 
 /* ---------------- layout (metres, +z faces the camera / front gate) ---------------- */
 const B = { x0: -32, x1: 32, z0: -26, z1: 4, h: 9 };
 const dockX = (d: number) => -24 + (d - 1) * 8;
 const DOCK_TRUCK_Z = B.z1 + 5.6;
 const PIT = { x0: -56, x1: -38, z0: -26, z1: -4, depth: 5 };
-const slot = (i: number): [number, number] => [42 + (i % 6) * 6.5, i < 6 ? -14 : 6];
+/** Parking: two rows of six to the right of the building; trucks 13+ continue further right. */
+const slotCol = (i: number) => (i % 6) + 6 * Math.floor(i / 12);
+const slot = (i: number): [number, number] => [42 + slotCol(i) * 6.5, Math.floor(i / 6) % 2 === 0 ? -14 : 6];
+const fenceRight = (count: number) => Math.max(82, 42 + slotCol(count - 1) * 6.5 + 10);
 const GATE_X = 4;
 const FENCE_Z = 44;
 const ROAD_Z = 54;
@@ -94,13 +97,14 @@ function Ground() {
 }
 
 function Fence() {
+  const right = fenceRight(useUi((s) => s.trucks.length));
   const segs: [number, number, number, number][] = [
     [-70, GATE_X - 4, FENCE_Z, FENCE_Z],
-    [GATE_X + 8, 82, FENCE_Z, FENCE_Z],
+    [GATE_X + 8, right, FENCE_Z, FENCE_Z],
     [-70, -6, -40, -40],
-    [6, 82, -40, -40],
+    [6, right, -40, -40],
     [-70, -70, -40, FENCE_Z],
-    [82, 82, -40, FENCE_Z],
+    [right, right, -40, FENCE_Z],
   ];
   return (
     <group>
@@ -114,8 +118,8 @@ function Fence() {
       {[-6, 6].map((x) => (
         <Box key={x} size={[0.8, 2.6, 0.8]} pos={[x, 1.3, -40]} color="#9aa6c0" />
       ))}
-      <Label pos={[GATE_X + 2, 4.5, FENCE_Z]} text="Main entrance" tone="blue" />
-      <Label pos={[0, 4, -40]} text="Back entrance · rarely used" tone="gray" />
+      <Label pos={[GATE_X + 2, 4.5, FENCE_Z]} text="Intrarea principală" tone="blue" />
+      <Label pos={[0, 4, -40]} text="Intrarea din spate · folosită rar" tone="gray" />
     </group>
   );
 }
@@ -145,6 +149,7 @@ function Building() {
       {!roofOff && <Box size={[w + 0.2, 0.6, d + 0.2]} pos={[cx, h + 0.5, cz]} color={C.roof} />}
       {!roofOff &&
         Array.from({ length: 6 }, (_, i) => <Box key={i} size={[3, 0.5, 2]} pos={[x0 + 8 + i * 9, h + 1, cz - 4]} color="#dfe6f5" />)}
+      <BrandSign pos={[-4, 7.3, z1 + 0.23]} width={22} />
       {/* front docks */}
       {Array.from({ length: DOCK_COUNT }, (_, i) => (
         <group
@@ -160,7 +165,7 @@ function Building() {
           ))}
           <Box size={[1.6, 0.9, 0.2]} pos={[dockX(i + 1), 5.6, z1 + 0.3]} color="#2f6bff" cast={false} />
           <Html position={[dockX(i + 1), 5.6, z1 + 0.5]} center distanceFactor={undefined} zIndexRange={[5, 0]} style={{ pointerEvents: "none" }}>
-            <span className="text-[10px] font-semibold text-white">D{i + 1}</span>
+            <span className="text-[10px] font-semibold text-white">R{i + 1}</span>
           </Html>
           {/* parking lines */}
           {[-2.4, 2.4].map((o) => (
@@ -273,7 +278,7 @@ function Cellar() {
       ].map(([x, z, w, dd], i) => (
         <Box key={i} size={[w, 1.1, dd]} pos={[x, 0.55, z]} color="#9fb4e6" opacity={0.6} />
       ))}
-      <Label pos={[cx, 3, cz]} text="Underground depot · vegetables & fruit" tone="green" />
+      <Label pos={[cx, 3, cz]} text="Depozit subteran · legume și fructe" tone="green" />
     </group>
   );
 }
@@ -291,6 +296,7 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
   const ref = useRef<Group>(null);
   const [hover, setHover] = useState(false);
   const [label, setLabel] = useState<string | null>(null);
+  const [shown, setShown] = useState(true);
   const select = useUi((s) => s.select);
   const selected = useUi((s) => s.selection?.kind === "truck" && s.selection.id === truck.id);
   const lastLabel = useRef<string | null>(null);
@@ -315,9 +321,13 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
       heading = a.heading;
     } else visible = false;
     g.visible = visible;
+    if (visible !== g.userData.shown) {
+      g.userData.shown = visible;
+      setShown(visible);
+    }
     g.position.set(x, 0, z);
     g.rotation.y = heading;
-    const next = visible && st.status === "loading" ? `${truck.plate} · loading ${Math.round(st.progress * 100)}%` : null;
+    const next = visible && st.status === "loading" ? `${truck.label} · încărcare ${Math.round(st.progress * 100)}%` : null;
     if (next !== lastLabel.current) {
       lastLabel.current = next;
       setLabel(next);
@@ -333,9 +343,16 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
           <meshBasicMaterial color="#2f6bff" transparent opacity={0.8} />
         </mesh>
       )}
-      {(label || selected || hover) && (
+      {shown && !label && !selected && !hover && (
+        <Html position={[0, 5.8, 0]} center zIndexRange={[15, 0]} style={{ pointerEvents: "none" }}>
+          <div className="grid h-5 w-5 place-items-center rounded-md text-[11px] font-bold text-white shadow ring-2 ring-white" style={{ background: truck.color }}>
+            {truck.number}
+          </div>
+        </Html>
+      )}
+      {shown && (label || selected || hover) && (
         <Html position={[0, 6.5, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-          <div className={`whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-semibold shadow ${selected ? "bg-[#2f6bff] text-white" : "bg-white text-slate-700"}`}>{label ?? `${truck.plate} · ${STATUS_LABEL[truckState(truck, useUi.getState().t).status]}`}</div>
+          <div className={`whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-semibold shadow ${selected ? "bg-[#2f6bff] text-white" : "bg-white text-slate-700"}`}>{label ?? `${truck.label} · ${STATUS_LABEL[truckState(truck, useUi.getState().t).status]}`}</div>
         </Html>
       )}
     </group>
@@ -346,10 +363,9 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
 function DockActivity({ dock }: { dock: number }) {
   const fork = useRef<Group>(null);
   const pallets = useRef<Group>(null);
-  const trucks = useMemo(() => TRUCKS.filter((t) => t.dock === dock), [dock]);
   useFrame(({ clock }) => {
-    const t = useUi.getState().t;
-    const loading = trucks.find((tr) => t >= tr.loadStart && t < tr.departAt);
+    const { t, trucks } = useUi.getState();
+    const loading = trucks.find((tr) => tr.dock === dock && t >= tr.loadStart && t < tr.departAt);
     const progress = loading ? (t - loading.loadStart) / (loading.departAt - loading.loadStart) : 0;
     if (pallets.current) pallets.current.children.forEach((c, i) => (c.visible = !!loading && i >= Math.floor(progress * 6)));
     if (fork.current) {
@@ -393,12 +409,14 @@ function CameraRig() {
 export default function WarehouseScene() {
   const select = useUi((s) => s.select);
   const active = useUi((s) => s.view === "warehouse");
+  const trucks = useUi((s) => s.trucks);
+  const right = fenceRight(trucks.length);
   const trees = useMemo(() => {
     const out: [number, number][] = [];
-    for (let x = -66; x <= 78; x += 9) out.push([x, FENCE_Z - 3], [x + 4, -36]);
-    for (let z = -30; z <= 36; z += 9) out.push([-66, z], [78, z]);
+    for (let x = -66; x <= right - 4; x += 9) out.push([x, FENCE_Z - 3], [x + 4, -36]);
+    for (let z = -30; z <= 36; z += 9) out.push([-66, z], [right - 4, z]);
     return out.filter(([x, z]) => !(Math.abs(x - GATE_X - 2) < 9 && z > 30) && !(Math.abs(x) < 9 && z < -30));
-  }, []);
+  }, [right]);
   return (
     <Canvas shadows flat dpr={[1, 2]} frameloop={active ? "always" : "never"} onPointerMissed={() => select(null)}>
       <color attach="background" args={["#eef2fb"]} />
@@ -425,7 +443,7 @@ export default function WarehouseScene() {
       {Array.from({ length: DOCK_COUNT }, (_, i) => (
         <DockActivity key={i} dock={i + 1} />
       ))}
-      {TRUCKS.map((t, i) => (
+      {trucks.map((t, i) => (
         <YardTruck key={t.id} truck={t} index={i} />
       ))}
       {/* forklift charging corner */}

@@ -1,10 +1,10 @@
 "use client";
 
-import { Box, Map as MapIcon, Pause, Play, Search, Warehouse } from "lucide-react";
+import { Map as MapIcon, Pause, Play, Search, Warehouse } from "lucide-react";
 import { useMemo, useState } from "react";
-import { INSTITUTIONS, TRUCKS } from "@/lib/seed";
+import { INSTITUTIONS } from "@/lib/seed";
 import { fmtTime } from "@/lib/sim";
-import { useMinute, useUi } from "@/lib/store";
+import { useMinute, useTrucks, useUi } from "@/lib/store";
 
 const SPEEDS = [1, 3, 10, 30];
 
@@ -20,16 +20,17 @@ export function TopBar() {
   return (
     <header className="pointer-events-auto flex h-14 items-center gap-3 border-b border-slate-200/70 bg-white/90 px-4 backdrop-blur">
       <div className="flex items-center gap-2 pr-2">
-        <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-[#4d82ff] to-[#1f3fb3] text-white shadow">
-          <Box size={18} />
-        </div>
-        <span className="text-[15px] font-semibold tracking-tight text-slate-900">DepotOps</span>
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-[#4d82ff] to-[#1f3fb3] text-[12px] font-bold tracking-tight text-white shadow">NP</div>
+        <span className="leading-tight">
+          <span className="block text-[15px] font-semibold tracking-tight text-slate-900">Nobil Prest</span>
+          <span className="hidden text-[10px] text-slate-400 sm:block">Depozit & livrări</span>
+        </span>
       </div>
       <SearchBox />
       <div className="ml-auto flex items-center gap-1 rounded-xl bg-slate-100 p-1">
         {(
           [
-            ["warehouse", "Warehouse", Warehouse],
+            ["warehouse", "Depozit", Warehouse],
             ["map", "Moldova", MapIcon],
           ] as const
         ).map(([v, label, Icon]) => (
@@ -43,7 +44,7 @@ export function TopBar() {
         <span className="flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> {fmtTime(t)}
         </span>
-        <button aria-label={playing ? "Pause" : "Play"} onClick={() => setPlaying(!playing)} className="grid h-6 w-6 place-items-center rounded-md text-slate-600 hover:bg-slate-100">
+        <button aria-label={playing ? "Pauză" : "Pornește"} onClick={() => setPlaying(!playing)} className="grid h-6 w-6 place-items-center rounded-md text-slate-600 hover:bg-slate-100">
           {playing ? <Pause size={13} /> : <Play size={13} />}
         </button>
         <div className="hidden items-center md:flex">
@@ -54,7 +55,7 @@ export function TopBar() {
           ))}
         </div>
       </div>
-      <span className="hidden rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200 lg:inline">Demo data</span>
+      <span className="hidden rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200 lg:inline">Date demo</span>
     </header>
   );
 }
@@ -63,10 +64,11 @@ function SearchBox() {
   const [q, setQ] = useState("");
   const select = useUi((s) => s.select);
   const setView = useUi((s) => s.setView);
+  const fleet = useTrucks();
   const results = useMemo(() => {
     const n = q.trim().toLowerCase();
-    if (n.length < 2) return [];
-    const trucks = TRUCKS.filter((t) => `${t.plate} ${t.driver}`.toLowerCase().includes(n)).map((t) => ({ key: t.id, label: t.plate, sub: t.driver, go: () => select({ kind: "truck", id: t.id }) }));
+    if (n.length < 1) return [];
+    const trucks = fleet.filter((t) => `${t.label} ${t.number} ${t.plate} ${t.driver}`.toLowerCase().includes(n)).map((t) => ({ key: t.id, label: t.label, sub: t.driver, go: () => select({ kind: "truck", id: t.id }) }));
     const insts = INSTITUTIONS.filter((i) => `${i.name} ${i.town}`.toLowerCase().includes(n))
       .slice(0, 8)
       .map((i) => ({
@@ -79,12 +81,12 @@ function SearchBox() {
         },
       }));
     return [...trucks, ...insts].slice(0, 9);
-  }, [q, select, setView]);
+  }, [q, select, setView, fleet]);
 
   return (
     <div className="relative hidden w-[min(380px,32vw)] md:block">
       <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search trucks, drivers, institutions…" className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 text-[12px] outline-none focus:border-blue-300 focus:bg-white" />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută mașini, șoferi, instituții…" className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 text-[12px] outline-none focus:border-blue-300 focus:bg-white" />
       {results.length > 0 && (
         <div className="absolute left-0 right-0 top-10 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
           {results.map((r) => (

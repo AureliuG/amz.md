@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef } from "react";
-import type { Group } from "three";
+import { CanvasTexture, SRGBColorSpace, type Group } from "three";
 
 type V3 = [number, number, number];
 
@@ -10,6 +10,36 @@ export function Box({ size, pos, color, opacity, cast = true, receive = true, on
     <mesh position={pos} castShadow={cast} receiveShadow={receive} onClick={onClick}>
       <boxGeometry args={size} />
       <meshStandardMaterial color={color} roughness={0.85} transparent={opacity !== undefined} opacity={opacity ?? 1} />
+    </mesh>
+  );
+}
+
+let brandTexture: CanvasTexture | null = null;
+/** "NOBIL PREST" lettering drawn once on a canvas (no font files to download). */
+function getBrandTexture() {
+  if (brandTexture) return brandTexture;
+  const c = document.createElement("canvas");
+  c.width = 1024;
+  c.height = 128;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = "#1f3fb3";
+  g.font = "800 84px Inter, 'Segoe UI', Arial, sans-serif";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText("NOBIL PREST", c.width / 2, c.height / 2 + 4);
+  brandTexture = new CanvasTexture(c);
+  brandTexture.colorSpace = SRGBColorSpace;
+  brandTexture.anisotropy = 4;
+  return brandTexture;
+}
+
+export function BrandSign({ pos, width, rotY = 0 }: { pos: V3; width: number; rotY?: number }) {
+  return (
+    <mesh position={pos} rotation={[0, rotY, 0]}>
+      <planeGeometry args={[width, width / 8]} />
+      <meshBasicMaterial map={getBrandTexture()} toneMapped={false} />
     </mesh>
   );
 }
@@ -35,7 +65,9 @@ export const TruckModel = forwardRef<Group, { color: string; refrigerated: boole
     >
       {/* cargo box */}
       <Box size={[3, 3.3, 7]} pos={[0, 2.35, -1.2]} color="#fbfcff" />
-      <Box size={[3.02, 0.5, 6.4]} pos={[0, 2.4, -1.2]} color={color} cast={false} />
+      <Box size={[3.02, 0.35, 6.8]} pos={[0, 1.05 + 0.35, -1.2]} color={color} cast={false} />
+      <BrandSign pos={[1.52, 2.8, -1.2]} width={6} rotY={Math.PI / 2} />
+      <BrandSign pos={[-1.52, 2.8, -1.2]} width={6} rotY={-Math.PI / 2} />
       {refrigerated && <Box size={[2.2, 1, 0.5]} pos={[0, 3.4, 2.5]} color="#cfd8ea" />}
       {/* cab */}
       <Box size={[2.9, 2.5, 2.3]} pos={[0, 1.85, 3.5]} color={color} />
