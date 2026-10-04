@@ -15,7 +15,7 @@ export function DetailPanel() {
   const select = useUi((s) => s.select);
   if (!sel) return null;
   return (
-    <Card className="pointer-events-auto w-[320px] max-w-[calc(100vw-32px)] overflow-hidden">
+    <Card key={"id" in sel ? `${sel.kind}-${sel.id}` : sel.kind} className="panel-in pointer-events-auto w-[320px] max-w-[calc(100vw-32px)] overflow-hidden">
       <div className="max-h-[calc(100vh-300px)] overflow-y-auto p-4">
         <button aria-label="Închide" onClick={() => select(null)} className="float-right grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700">
           <X size={14} />

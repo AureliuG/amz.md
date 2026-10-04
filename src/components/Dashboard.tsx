@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { DAY_END, useUi } from "@/lib/store";
 import { FleetPanel, TrackingPanel } from "./hud/BottomPanels";
+import { DeliveriesView } from "./DeliveriesView";
 import { DetailPanel } from "./hud/DetailPanel";
 import { Kpis } from "./hud/Kpis";
 import { TopBar } from "./hud/TopBar";
@@ -66,6 +67,12 @@ export function Dashboard() {
   useClock();
   const view = useUi((s) => s.view);
   useEffect(() => useUi.getState().loadSavedFleet(), []);
+  // Esc closes the detail panel.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && useUi.getState().select(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   // Both views stay mounted once opened, so switching is instant and WebGL contexts aren't torn down.
   const [mapOpened, setMapOpened] = useState(false);
   useEffect(() => {
@@ -75,16 +82,25 @@ export function Dashboard() {
     <div className="flex h-dvh flex-col">
       <TopBar />
       <main className="relative flex-1 overflow-hidden">
-        <div className={`absolute inset-0 isolate ${view === "warehouse" ? "" : "invisible"}`}>
+        <div className={`absolute inset-0 isolate transition-opacity duration-500 ${view === "warehouse" ? "opacity-100" : "pointer-events-none opacity-0"}`}>
           <WarehouseScene />
         </div>
         {mapOpened && (
-          <div className={`absolute inset-0 ${view === "map" ? "" : "invisible"}`}>
+          <div className={`absolute inset-0 transition-opacity duration-500 ${view === "map" ? "opacity-100" : "pointer-events-none opacity-0"}`}>
             <MoldovaMap />
           </div>
         )}
+        {view === "deliveries" && (
+          <>
+            <DeliveriesView />
+            <div className="pointer-events-none absolute right-3 top-3 z-20 sm:right-4 sm:top-4">
+              <DetailPanel />
+            </div>
+          </>
+        )}
         {/* HUD: the overlay never blocks the scene except where panels are */}
-        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between gap-3 p-3 sm:p-4">
+        <div className={`pointer-events-none absolute inset-0 z-10 flex ${view === "deliveries" ? "hidden" : ""}`} data-hud>
+          <div className="flex h-full w-full flex-col justify-between gap-3 p-3 sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <Kpis />
             <div className="flex items-start gap-2">
@@ -100,6 +116,7 @@ export function Dashboard() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <TrackingPanel />
             <FleetPanel />
+          </div>
           </div>
         </div>
       </main>

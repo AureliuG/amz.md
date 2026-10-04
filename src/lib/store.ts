@@ -4,7 +4,7 @@ import type { Selection, Truck } from "./types";
 
 const FLEET_KEY = "nobilprest.truckCount";
 
-export type View = "warehouse" | "map";
+export type View = "warehouse" | "map" | "deliveries";
 
 interface UiState {
   view: View;
@@ -15,6 +15,9 @@ interface UiState {
   speed: number;
   selection: Selection;
   roofOff: boolean;
+  /** Time the activity feed was last opened (for the unread badge). */
+  feedSeenAt: number;
+  markFeedSeen: () => void;
   /** Incremented to ask the active view to zoom / reset its camera. */
   cameraCmd: { n: number; action: "in" | "out" | "reset" };
   /** The fleet with today's plan. Its size can be changed from the Trucks tab. */
@@ -40,6 +43,8 @@ export const useUi = create<UiState>((set) => ({
   speed: 3,
   selection: null,
   roofOff: false,
+  feedSeenAt: 6 * 60 + 5,
+  markFeedSeen: () => set((s) => ({ feedSeenAt: s.t })),
   cameraCmd: { n: 0, action: "reset" },
   trucks: buildFleet(DEFAULT_TRUCK_COUNT),
   setTruckCount: (n) => {

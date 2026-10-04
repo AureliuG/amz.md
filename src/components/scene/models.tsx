@@ -1,5 +1,6 @@
 "use client";
 
+import { RoundedBox } from "@react-three/drei";
 import { forwardRef } from "react";
 import { CanvasTexture, SRGBColorSpace, type Group } from "three";
 
@@ -11,6 +12,15 @@ export function Box({ size, pos, color, opacity, cast = true, receive = true, on
       <boxGeometry args={size} />
       <meshStandardMaterial color={color} roughness={0.85} transparent={opacity !== undefined} opacity={opacity ?? 1} />
     </mesh>
+  );
+}
+
+/** Box with softened edges, for the toy-like look of vehicles. */
+export function RBox({ size, pos, color, radius = 0.25 }: { size: V3; pos: V3; color: string; radius?: number }) {
+  return (
+    <RoundedBox args={size} radius={radius} smoothness={3} position={pos} castShadow receiveShadow>
+      <meshStandardMaterial color={color} roughness={0.6} />
+    </RoundedBox>
   );
 }
 
@@ -64,14 +74,17 @@ export const TruckModel = forwardRef<Group, { color: string; refrigerated: boole
       }}
     >
       {/* cargo box */}
-      <Box size={[3, 3.3, 7]} pos={[0, 2.35, -1.2]} color="#fbfcff" />
+      <RBox size={[3, 3.3, 7]} pos={[0, 2.35, -1.2]} color="#fbfcff" radius={0.3} />
       <Box size={[3.02, 0.35, 6.8]} pos={[0, 1.05 + 0.35, -1.2]} color={color} cast={false} />
       <BrandSign pos={[1.52, 2.8, -1.2]} width={6} rotY={Math.PI / 2} />
       <BrandSign pos={[-1.52, 2.8, -1.2]} width={6} rotY={-Math.PI / 2} />
-      {refrigerated && <Box size={[2.2, 1, 0.5]} pos={[0, 3.4, 2.5]} color="#cfd8ea" />}
+      {refrigerated && <RBox size={[2.2, 1, 0.5]} pos={[0, 3.4, 2.5]} color="#cfd8ea" radius={0.15} />}
       {/* cab */}
-      <Box size={[2.9, 2.5, 2.3]} pos={[0, 1.85, 3.5]} color={color} />
-      <Box size={[2.6, 1, 0.1]} pos={[0, 2.4, 4.66]} color="#1d2b4f" cast={false} />
+      <RBox size={[2.9, 2.6, 2.4]} pos={[0, 1.9, 3.5]} color={color} radius={0.4} />
+      <Box size={[2.5, 1, 0.1]} pos={[0, 2.45, 4.72]} color="#1d2b4f" cast={false} />
+      {[-1.05, 1.05].map((x) => (
+        <Box key={x} size={[0.45, 0.3, 0.08]} pos={[x, 1.15, 4.72]} color="#fff6d6" cast={false} />
+      ))}
       {/* chassis + wheels */}
       <Box size={[2.6, 0.5, 9.6]} pos={[0, 0.75, 0]} color="#3a4256" />
       {[-3.6, -1.6, 3.3].map((z) =>
@@ -89,7 +102,7 @@ export const TruckModel = forwardRef<Group, { color: string; refrigerated: boole
 export const ForkliftModel = forwardRef<Group, { carrying?: boolean }>(function ForkliftModel({ carrying }, ref) {
   return (
     <group ref={ref}>
-      <Box size={[1.4, 1, 2]} pos={[0, 0.8, 0]} color="#f5b81b" />
+      <RBox size={[1.4, 1, 2]} pos={[0, 0.8, 0]} color="#f5b81b" radius={0.15} />
       <Box size={[1.3, 0.1, 1.3]} pos={[0, 2.3, -0.2]} color="#2a2f3a" />
       {[-0.55, 0.55].map((x) => (
         <Box key={x} size={[0.1, 2, 0.1]} pos={[x, 1.3, -0.75]} color="#2a2f3a" />
@@ -117,8 +130,12 @@ export function Tree({ pos, s = 1 }: { pos: [number, number]; s?: number }) {
         <meshStandardMaterial color="#9a7b5c" />
       </mesh>
       <mesh position={[0, 3, 0]} castShadow>
-        <sphereGeometry args={[1.4, 12, 10]} />
+        <sphereGeometry args={[1.4, 16, 12]} />
         <meshStandardMaterial color="#58c28d" roughness={0.8} />
+      </mesh>
+      <mesh position={[0.5, 3.9, 0.2]} castShadow>
+        <sphereGeometry args={[0.9, 14, 10]} />
+        <meshStandardMaterial color="#6bd19c" roughness={0.8} />
       </mesh>
     </group>
   );

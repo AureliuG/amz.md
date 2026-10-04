@@ -3,7 +3,7 @@
 import { Html, MapControls, OrthographicCamera } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Group } from "three";
+import { Vector3, type Group } from "three";
 import { BACK_DOCK_COUNT, DOCK_COUNT, PRODUCTS } from "@/lib/seed";
 import { STATUS_LABEL, truckState } from "@/lib/sim";
 import { useUi } from "@/lib/store";
@@ -34,7 +34,8 @@ const C = {
 };
 
 type P = [number, number];
-function along(path: P[], u: number): { p: P; heading: number } {
+/** Position and heading at fraction `u` of a polyline. With `reverseLast`, the last segment is driven backwards (backing into a dock). */
+function along(path: P[], u: number, reverseLast = false): { p: P; heading: number } {
   const seg = path.slice(1).map((b, i) => Math.hypot(b[0] - path[i][0], b[1] - path[i][1]));
   let d = Math.min(1, Math.max(0, u)) * seg.reduce((a, b) => a + b, 0);
   for (let i = 0; i < seg.length; i++) {
@@ -42,12 +43,19 @@ function along(path: P[], u: number): { p: P; heading: number } {
       const a = path[i];
       const b = path[i + 1];
       const f = seg[i] ? Math.min(1, d / seg[i]) : 0;
-      return { p: [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f], heading: Math.atan2(b[0] - a[0], b[1] - a[1]) };
+      const back = reverseLast && i === seg.length - 1;
+      return { p: [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f], heading: back ? Math.atan2(a[0] - b[0], a[1] - b[1]) : Math.atan2(b[0] - a[0], b[1] - a[1]) };
     }
     d -= seg[i];
   }
   return { p: path[0], heading: 0 };
 }
+/** Minutes at the start of loading spent driving from the parking slot and backing into the dock. */
+const MANEUVER_MIN = 3;
+const toDockPath = (t: Truck, i: number): P[] => {
+  const [sx, sz] = slot(i);
+  return [[sx, sz], [sx, 26], [dockX(t.dock), 24], [dockX(t.dock), DOCK_TRUCK_Z]];
+};
 const departPath = (t: Truck): P[] => [[dockX(t.dock), DOCK_TRUCK_Z], [dockX(t.dock), 28], [GATE_X, 34], [GATE_X, FENCE_Z], [GATE_X + 8, ROAD_Z + 2], [140, ROAD_Z + 2]];
 const arrivePath = (i: number): P[] => {
   const [sx, sz] = slot(i);
@@ -301,22 +309,31 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
   const selected = useUi((s) => s.selection?.kind === "truck" && s.selection.id === truck.id);
   const lastLabel = useRef<string | null>(null);
 
-  useFrame(() => {
+  const ring = useRef<Group>(null);
+  useFrame(({ clock }, dt) => {
     const g = ref.current;
     if (!g) return;
-    const st = truckState(truck, useUi.getState().t);
+    const t = useUi.getState().t;
+    const st = truckState(truck, t);
     let visible = true;
     let x = 0;
     let z = 0;
     let heading = 0;
     if (st.status === "parked" || st.status === "done") {
       [x, z] = slot(index);
-      heading = Math.PI;
+      heading = 0;
     } else if (st.status === "loading") {
-      x = dockX(truck.dock);
-      z = DOCK_TRUCK_Z;
+      const m = (t - truck.loadStart) / MANEUVER_MIN;
+      if (m < 1) {
+        const a = along(toDockPath(truck, index), m, true);
+        [x, z] = a.p;
+        heading = a.heading;
+      } else {
+        x = dockX(truck.dock);
+        z = DOCK_TRUCK_Z;
+      }
     } else if (st.status === "departing" || st.status === "arriving") {
-      const a = along(st.status === "departing" ? departPath(truck) : arrivePath(index), st.yard);
+      const a = st.status === "departing" ? along(departPath(truck), st.yard) : along(arrivePath(index), st.yard, true);
       [x, z] = a.p;
       heading = a.heading;
     } else visible = false;
@@ -326,7 +343,13 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
       setShown(visible);
     }
     g.position.set(x, 0, z);
-    g.rotation.y = heading;
+    // Ease the heading so turns look like steering rather than snapping.
+    const diff = Math.atan2(Math.sin(heading - g.rotation.y), Math.cos(heading - g.rotation.y));
+    g.rotation.y = visible && g.userData.placed ? g.rotation.y + diff * Math.min(1, dt * 10) : heading;
+    g.userData.placed = visible;
+    g.userData.worldX = x;
+    g.userData.worldZ = z;
+    if (ring.current) ring.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 4) * 0.06);
     const next = visible && st.status === "loading" ? `${truck.label} · încărcare ${Math.round(st.progress * 100)}%` : null;
     if (next !== lastLabel.current) {
       lastLabel.current = next;
@@ -335,13 +358,19 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
   });
 
   return (
-    <group ref={ref}>
+    <group ref={ref} name={`truck-${truck.id}`}>
       <TruckModel color={truck.color} refrigerated={truck.refrigerated} onClick={() => select({ kind: "truck", id: truck.id })} onHover={setHover} />
       {(selected || hover) && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.08, 0]}>
-          <ringGeometry args={[6, 6.6, 40]} />
-          <meshBasicMaterial color="#2f6bff" transparent opacity={0.8} />
-        </mesh>
+        <group ref={ring}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.08, 0]}>
+            <ringGeometry args={[6, 6.6, 48]} />
+            <meshBasicMaterial color="#2f6bff" transparent opacity={selected ? 0.9 : 0.5} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.07, 0]}>
+            <circleGeometry args={[6, 48]} />
+            <meshBasicMaterial color="#2f6bff" transparent opacity={0.08} />
+          </mesh>
+        </group>
       )}
       {shown && !label && !selected && !hover && (
         <Html position={[0, 5.8, 0]} center zIndexRange={[15, 0]} style={{ pointerEvents: "none" }}>
@@ -388,21 +417,60 @@ function DockActivity({ dock }: { dock: number }) {
   );
 }
 
+const HOME_TARGET = new Vector3(5, 0, 2);
+const HOME_OFFSET = new Vector3(90, 90, 113);
+const HOME_ZOOM = 9;
+
+/** Smooth camera: eases zoom and target, and glides to a truck when it is selected. */
 function CameraRig() {
   const cmd = useUi((s) => s.cameraCmd);
-  const { camera, controls } = useThree() as unknown as { camera: { zoom: number; position: { set: (x: number, y: number, z: number) => void }; updateProjectionMatrix: () => void }; controls: { target: { set: (x: number, y: number, z: number) => void }; update: () => void } | null };
+  const selection = useUi((s) => s.selection);
+  const { camera, controls, scene } = useThree() as unknown as {
+    camera: { zoom: number; position: Vector3; updateProjectionMatrix: () => void };
+    controls: { target: Vector3; update: () => void } | null;
+    scene: { getObjectByName: (n: string) => (Group & { userData: { worldX?: number; worldZ?: number } }) | undefined };
+  };
+  const goal = useRef<{ target?: Vector3; zoom?: number; follow?: string }>({});
+
   useEffect(() => {
     if (cmd.n === 0 || useUi.getState().view !== "warehouse") return;
-    if (cmd.action === "in") camera.zoom *= 1.25;
-    if (cmd.action === "out") camera.zoom /= 1.25;
-    if (cmd.action === "reset") {
-      camera.zoom = 9;
-      camera.position.set(95, 90, 115);
-      controls?.target.set(5, 0, 2);
+    if (cmd.action === "in") goal.current.zoom = Math.min(30, camera.zoom * 1.35);
+    if (cmd.action === "out") goal.current.zoom = Math.max(3, camera.zoom / 1.35);
+    if (cmd.action === "reset") goal.current = { target: HOME_TARGET.clone(), zoom: HOME_ZOOM };
+  }, [cmd, camera]);
+
+  useEffect(() => {
+    if (selection?.kind === "truck") goal.current = { follow: `truck-${selection.id}`, zoom: Math.max(camera.zoom, 12) };
+    else if (goal.current.follow) goal.current = {};
+  }, [selection, camera]);
+
+  useFrame((_, dt) => {
+    if (!controls) return;
+    const k = Math.min(1, dt * 4);
+    const g = goal.current;
+    let target = g.target;
+    if (g.follow) {
+      const obj = scene.getObjectByName(g.follow);
+      if (obj?.visible && obj.userData.worldX !== undefined) target = new Vector3(obj.userData.worldX, 0, obj.userData.worldZ);
     }
-    camera.updateProjectionMatrix();
-    controls?.update();
-  }, [cmd, camera, controls]);
+    if (target) {
+      const delta = target.clone().sub(controls.target).multiplyScalar(k);
+      controls.target.add(delta);
+      camera.position.add(delta);
+      if (g.target && delta.lengthSq() < 1e-4) g.target = undefined;
+    }
+    if (g.zoom !== undefined) {
+      camera.zoom += (g.zoom - camera.zoom) * k;
+      camera.updateProjectionMatrix();
+      if (Math.abs(g.zoom - camera.zoom) < 0.01) g.zoom = undefined;
+    }
+    if (cmd.action === "reset" && g.target) {
+      // Also swing the camera back to the default angle.
+      const want = controls.target.clone().add(HOME_OFFSET);
+      camera.position.lerp(want, k);
+    }
+    controls.update();
+  });
   return null;
 }
 
@@ -420,7 +488,7 @@ export default function WarehouseScene() {
   return (
     <Canvas shadows flat dpr={[1, 2]} frameloop={active ? "always" : "never"} onPointerMissed={() => select(null)}>
       <color attach="background" args={["#eef2fb"]} />
-      <OrthographicCamera makeDefault position={[95, 90, 115]} zoom={9} near={-500} far={1000} />
+      <OrthographicCamera makeDefault position={[95, 90, 115]} zoom={HOME_ZOOM} near={-500} far={1000} />
       <MapControls makeDefault target={[5, 0, 2]} enableDamping maxPolarAngle={1.2} minZoom={3} maxZoom={30} />
       <CameraRig />
       <hemisphereLight args={["#ffffff", "#dfe6f7", 1.6]} />

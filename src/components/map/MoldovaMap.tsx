@@ -4,7 +4,7 @@ import maplibregl from "maplibre-gl";
 import type { GeoJSONSource, LayerSpecification, Map as MLMap, StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef } from "react";
-import { arcLine } from "@/lib/geo";
+import { arcLine, arcPoint } from "@/lib/geo";
 import { INSTITUTION_BY_ID, INSTITUTIONS, WAREHOUSE } from "@/lib/seed";
 import { stopStatus, truckState } from "@/lib/sim";
 import { useUi } from "@/lib/store";
@@ -24,6 +24,14 @@ const STYLE: StyleSpecification = {
     { id: "neighbours", type: "fill", source: "region", filter: ["!=", ["get", "code"], "MD"], paint: { "fill-color": "#e9edf6" } },
     { id: "md-shadow", type: "line", source: "region", filter: ["==", ["get", "code"], "MD"], paint: { "line-color": "#9fb0d6", "line-width": 14, "line-blur": 12, "line-translate": [4, 8], "line-opacity": 0.7 } },
     { id: "md", type: "fill", source: "region", filter: ["==", ["get", "code"], "MD"], paint: { "fill-color": "#f9fbff" } },
+    // Moldova as a raised "game board" tile at country zoom, flattening as you zoom in.
+    {
+      id: "md-tile",
+      type: "fill-extrusion",
+      source: "region",
+      filter: ["==", ["get", "code"], "MD"],
+      paint: { "fill-extrusion-color": "#f7f9ff", "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 6, 5000, 8.5, 0], "fill-extrusion-opacity": 1, "fill-extrusion-vertical-gradient": true },
+    },
     { id: "md-border", type: "line", source: "region", filter: ["==", ["get", "code"], "MD"], paint: { "line-color": "#7f9bdc", "line-width": 1.6 } },
   ],
 };
@@ -72,6 +80,26 @@ function routeFeatures(trucks: Truck[]) {
   );
 }
 
+/** The part of each route already driven, so progress reads at a glance. */
+function traveledFeatures(trucks: Truck[], t: number) {
+  return fc(
+    trucks.flatMap((tr) => {
+      if (t <= tr.departAt) return [];
+      const pts: LngLat[] = [WAREHOUSE, ...tr.stops.map((s) => INSTITUTION_BY_ID.get(s.institutionId)!.pos), WAREHOUSE];
+      const line: LngLat[] = [];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const start = i === 0 ? tr.departAt : tr.stops[i - 1].leaveAt;
+        const end = i < tr.stops.length ? tr.stops[i].arriveAt : tr.returnAt;
+        if (t <= start) break;
+        const p = Math.min(1, (t - start) / (end - start));
+        for (let j = 0; j <= 14; j++) line.push(arcPoint(pts[i], pts[i + 1], (j / 14) * p));
+        if (p < 1) break;
+      }
+      return line.length > 1 ? [{ type: "Feature" as const, properties: { id: tr.id, color: tr.color }, geometry: { type: "LineString" as const, coordinates: line } }] : [];
+    }),
+  );
+}
+
 function institutionFeatures(trucks: Truck[], t: number) {
   const today = new Map<string, { status: string; truck: string; color: string }>();
   trucks.forEach((tr) => tr.stops.forEach((s, i) => today.set(s.institutionId, { status: stopStatus(tr, i, t), truck: tr.id, color: tr.color })));
@@ -115,7 +143,10 @@ export default function MoldovaMap() {
       map.addSource("routes", { type: "geojson", data: routeFeatures(trucks) });
       map.addSource("insts", { type: "geojson", data: institutionFeatures(trucks, t) });
       map.addLayer({ id: "routes-casing", type: "line", source: "routes", paint: { "line-color": "#ffffff", "line-width": 5, "line-opacity": 0.9 }, layout: { "line-cap": "round", "line-join": "round" } });
-      map.addLayer({ id: "routes", type: "line", source: "routes", paint: { "line-color": ["get", "color"], "line-width": 2.2, "line-opacity": 0.75, "line-dasharray": [2, 1.5] }, layout: { "line-cap": "round" } });
+      map.addLayer({ id: "routes", type: "line", source: "routes", paint: { "line-color": ["get", "color"], "line-width": 2.2, "line-opacity": 0.55, "line-dasharray": [2, 1.5] }, layout: { "line-cap": "round" } });
+      map.addSource("traveled", { type: "geojson", data: traveledFeatures(trucks, t) });
+      map.addLayer({ id: "traveled", type: "line", source: "traveled", paint: { "line-color": ["get", "color"], "line-width": 3.5, "line-opacity": 0.95 }, layout: { "line-cap": "round", "line-join": "round" } });
+      map.addLayer({ id: "insts-pulse", type: "circle", source: "insts", filter: ["==", ["get", "status"], "unloading"], paint: { "circle-radius": 10, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#f59e0b", "circle-stroke-width": 2, "circle-stroke-opacity": 0.8 } });
       map.addLayer({
         id: "insts-other",
         type: "circle",
@@ -166,6 +197,7 @@ export default function MoldovaMap() {
       truckEls.forEach(({ marker }) => marker.remove());
       truckEls.clear();
       (map.getSource("routes") as GeoJSONSource | undefined)?.setData(routeFeatures(trucks));
+      (map.getSource("traveled") as GeoJSONSource | undefined)?.setData(traveledFeatures(trucks, useUi.getState().t));
       lastMinute = -1;
       trucks.forEach((t) => {
         const div = document.createElement("div");
@@ -190,6 +222,7 @@ export default function MoldovaMap() {
 
     // Animation: trucks every frame, institution colours once a sim-minute.
     let raf = 0;
+    let pulseFrame = 0;
     const tick = () => {
       const { t, selection, trucks } = useUi.getState();
       if (map.isStyleLoaded() || map.getSource("insts")) {
@@ -207,7 +240,14 @@ export default function MoldovaMap() {
         if (minute !== lastMinute) {
           lastMinute = minute;
           (map.getSource("insts") as GeoJSONSource | undefined)?.setData(institutionFeatures(trucks, t));
+          (map.getSource("traveled") as GeoJSONSource | undefined)?.setData(traveledFeatures(trucks, t));
         }
+      }
+      // Pulse rings around stops being unloaded right now.
+      if (map.getLayer("insts-pulse") && (pulseFrame = (pulseFrame + 1) % 2) === 0) {
+        const ph = (performance.now() % 1600) / 1600;
+        map.setPaintProperty("insts-pulse", "circle-radius", 8 + ph * 16);
+        map.setPaintProperty("insts-pulse", "circle-stroke-opacity", 0.9 * (1 - ph));
       }
       raf = requestAnimationFrame(tick);
     };
@@ -218,7 +258,8 @@ export default function MoldovaMap() {
       if (s.selection === prev.selection || !map.getLayer("routes")) return;
       const sel = s.selection;
       const truckId = sel?.kind === "truck" ? sel.id : null;
-      map.setPaintProperty("routes", "line-opacity", truckId ? ["case", ["==", ["get", "id"], truckId], 1, 0.12] : 0.75);
+      map.setPaintProperty("routes", "line-opacity", truckId ? ["case", ["==", ["get", "id"], truckId], 0.9, 0.1] : 0.55);
+      map.setPaintProperty("traveled", "line-opacity", truckId ? ["case", ["==", ["get", "id"], truckId], 1, 0.15] : 0.95);
       map.setPaintProperty("routes", "line-width", truckId ? ["case", ["==", ["get", "id"], truckId], 4, 2] : 2.2);
       map.setFilter("insts-selected", ["==", ["get", "id"], sel?.kind === "institution" ? sel.id : ""]);
       if (truckId) {
