@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #e9eef9;
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: #0f172a;
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Map markers (plain DOM, owned by MapLibre) */
+.truck-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+.truck-marker.is-home {
+  opacity: 0;
+  pointer-events: none;
+}
+.truck-dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  background: var(--c);
+  border: 2px solid #fff;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.35);
+}
+.truck-label {
+  margin-top: 2px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  font: 600 10px/16px Inter, system-ui, sans-serif;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
+  white-space: nowrap;
+}
+.truck-marker.is-unloading .truck-dot {
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.45), 0 4px 12px -2px rgba(15, 23, 42, 0.35);
+}
+.truck-marker.is-selected .truck-dot {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 5px rgba(47, 107, 255, 0.35), 0 4px 12px -2px rgba(15, 23, 42, 0.35);
+}
+.truck-marker.is-selected .truck-label {
+  background: #2f6bff;
+  color: #fff;
+}
+.wh-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+.wh-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4d82ff, #1f3fb3);
+  border: 3px solid #fff;
+  box-shadow: 0 8px 20px -4px rgba(31, 63, 179, 0.6);
+}
+.wh-label {
+  margin-top: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #1f3fb3;
+  color: #fff;
+  font: 600 10.5px/17px Inter, system-ui, sans-serif;
+  white-space: nowrap;
+}
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}

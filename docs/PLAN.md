@@ -4,6 +4,20 @@ Goal: a dispatcher dashboard that looks and feels like a strategy game, similar 
 "WareTrack" demo (React + React Three Fiber), connected to a live map of Moldova that
 plans and tracks real deliveries.
 
+## 0. What we know about the business (Oct 2026)
+
+- We supply food and ingredients to **institutions**: kindergartens (most of them), schools, hospitals,
+  penitentiaries and social care. About **800 institutions** across Moldova.
+- **One big warehouse** with two entrances. The **front entrance** is the one we use and the back one is rarely used.
+  There's a small **office** inside, and an **underground depot** for vegetables (carrots, potatoes, …) and fruit.
+- About **12 trucks** (to confirm) deliver every weekday, each to its own part of Moldova.
+- Orders come **by phone** and are entered in **1C**. Delivery is 1–3 days after the order.
+  There are no pickups, no cash on delivery and no returns.
+- Drivers mostly use Android phones, and several use iPhones.
+- Stock is kept in the warehouse. First users: our own team, as an internal dashboard.
+
+**Status:** a clickable demo (phases 1 + 2 visuals + 4) with generated data is in `src/`.
+
 ## 1. What the reference demo actually is
 
 Looking at the video frame by frame, the demo has three parts:
@@ -104,7 +118,20 @@ so you can show it before the real integrations exist.
 - **Performance**: low‑poly models, instancing for pallets/trees, and the 3D scene loaded only on demand, so the
   dashboard stays fast on ordinary office PCs and phones.
 
-## 8. Questions for the business (needed before phase 1)
+## 8. Open questions
+
+1. Exact warehouse address (the map pin is a placeholder in Chișinău).
+2. Exact number of trucks, plates, models and capacities (kg and pallets), and which are refrigerated.
+3. Are routes fixed per day of the week (e.g. Monday = North), or planned fresh each day?
+4. Do institutions have required delivery times (e.g. kindergartens before 10:00)?
+5. 1C: which configuration (Trade/UT, Accounting, custom), version, and who maintains it?
+   Can we get an export of orders, institutions (with addresses) and stock?
+6. Is there a list of the ~800 institutions with addresses and/or coordinates?
+7. Do drivers need paper documents (invoices, waybills) signed at delivery, or could they go digital?
+8. UI language for staff: Romanian, Russian, or both?
+9. Company name and logo for the app and the trucks.
+
+## 9. Original discovery questions (answered above where known)
 
 1. What do you deliver (parcels, pallets, furniture, food/cold chain)? Typical weight/volume per order?
 2. How many warehouses/hubs, and where (Chișinău only, or also Bălți, Cahul, etc.)?
