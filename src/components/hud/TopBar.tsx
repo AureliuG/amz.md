@@ -83,7 +83,7 @@ function SearchBox() {
   const results = useMemo(() => {
     const n = q.trim().toLowerCase();
     if (n.length < 1) return [];
-    const trucks = fleet.filter((t) => `${t.label} ${t.number} ${t.plate} ${t.driver}`.toLowerCase().includes(n)).map((t) => ({ key: t.id, label: t.label, sub: t.driver, go: () => select({ kind: "truck", id: t.id }) }));
+    const trucks = fleet.filter((t) => `${t.label} ${t.number} ${t.plate} ${t.driver}`.toLowerCase().includes(n)).map((t) => ({ key: t.id, label: t.plate ? `${t.label} · ${t.plate}` : t.label, sub: t.driver, go: () => select({ kind: "truck", id: t.id }) }));
     const insts = INSTITUTIONS.filter((i) => `${i.name} ${i.town}`.toLowerCase().includes(n))
       .slice(0, 8)
       .map((i) => ({

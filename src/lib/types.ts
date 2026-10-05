@@ -49,6 +49,10 @@ export interface Truck {
   label: string;
   /** Registration plate; empty until the real fleet data is entered. */
   plate: string;
+  /** GPS tracker ID from the GPS client; empty for trucks not yet registered there. */
+  trackerId: string;
+  /** False when the tracker has never reported a position. */
+  gpsOk: boolean;
   model: string;
   refrigerated: boolean;
   capacityKg: number;

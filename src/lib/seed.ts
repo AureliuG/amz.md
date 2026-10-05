@@ -148,7 +148,7 @@ export const PRODUCTS: Product[] = [
   { id: "p-peas", name: "Mazăre conservată", zone: "dry", unit: "pcs", stock: 480, min: 500, color: "#7fb05a" },
 ];
 
-const DRIVERS = ["Ion Rusu", "Vasile Ceban", "Andrei Lungu", "Sergiu Popa", "Mihai Cojocaru", "Victor Țurcanu", "Igor Munteanu", "Nicolae Ciobanu", "Alexandru Rotaru", "Dumitru Guțu", "Petru Bivol", "Ruslan Moraru"];
+const DRIVERS = ["Ion Rusu", "Vasile Ceban", "Andrei Lungu", "Sergiu Popa", "Mihai Cojocaru", "Victor Țurcanu", "Igor Munteanu", "Nicolae Ciobanu", "Alexandru Rotaru", "Dumitru Guțu", "Petru Bivol", "Ruslan Moraru", "Oleg Sârbu", "Valeriu Cebotari", "Grigore Țurcan", "Eugen Botnari"];
 const MODELS: [string, boolean, number][] = [
   ["Isuzu NQR · frigorific", true, 3500],
   ["Mercedes Atego · frigorific", true, 5000],
@@ -161,7 +161,29 @@ const TRUCK_COLORS = ["#2f6bff", "#13a37f", "#f08a24", "#8d5cf6", "#e2483d", "#0
 
 const DWELL_MIN = 14;
 
-export const DEFAULT_TRUCK_COUNT = 12;
+/**
+ * The real fleet as listed in the GPS client (row number = Mașina N).
+ * `gps: false` = the tracker has never reported (last time 01.01 00:00:00 in the GPS client).
+ */
+export const REAL_FLEET: { plate: string; tracker: string; gps: boolean }[] = [
+  { plate: "XLX 827", tracker: "059166", gps: true },
+  { plate: "XLX 119", tracker: "065129", gps: true },
+  { plate: "XLX 092", tracker: "059072", gps: true },
+  { plate: "WSS 904", tracker: "059024", gps: false },
+  { plate: "WSS 794", tracker: "059085", gps: false },
+  { plate: "SZS 070", tracker: "065080", gps: true },
+  { plate: "ROV 016", tracker: "059084", gps: true },
+  { plate: "MSM 906", tracker: "068235", gps: true },
+  { plate: "MSM 860", tracker: "062138", gps: true },
+  { plate: "KZC 153", tracker: "009254", gps: true },
+  { plate: "KOL 959", tracker: "059083", gps: true },
+  { plate: "HNAX 023", tracker: "065133", gps: false },
+  { plate: "DAD 1", tracker: "068226", gps: true },
+  { plate: "BTM 486", tracker: "068234", gps: true },
+  { plate: "BKB 717", tracker: "068232", gps: true },
+  { plate: "BKB 702", tracker: "068233", gps: true },
+];
+export const DEFAULT_TRUCK_COUNT = REAL_FLEET.length;
 export const MAX_TRUCKS = 24;
 
 const truckColor = (k: number) => (k < TRUCK_COLORS.length ? TRUCK_COLORS[k] : `hsl(${(k * 137) % 360} 65% 48%)`);
@@ -181,10 +203,15 @@ export function buildFleet(count: number): Truck[] {
   const sectors = count === 1 ? [withGeo] : [...chunk(city, cityCount), ...chunk(country, count - cityCount)];
   const cityDirs = ["nord", "est", "sud", "vest", "centru", "Botanica"];
 
+  // Trucks with the farthest regions load and leave first, so everyone is back in the afternoon.
+  const meanKm = sectors.map((sec) => sec.reduce((sum, x) => sum + x.d, 0) / Math.max(1, sec.length));
+  const departRank = new Array<number>(sectors.length);
+  [...meanKm.keys()].sort((a, b) => meanKm[b] - meanKm[a]).forEach((k, rank) => (departRank[k] = rank));
+
   let orderSeq = 41870;
   return sectors.map((sector, k) => {
     const isCity = k < cityCount && count > 1;
-    const want = isCity ? 15 : sector[0] && sector[0].d > 90 ? 9 : 11;
+    const want = isCity ? 15 : meanKm[k] > 150 ? 7 : meanKm[k] > 90 ? 9 : 11;
     // Today's stops: a compact cluster around a random institution of the sector.
     const anchor = sector[Math.floor(r() * sector.length)];
     const today = [...sector].sort((a, b) => haversineKm(a.i.pos, anchor.i.pos) - haversineKm(b.i.pos, anchor.i.pos)).slice(0, want).map((x) => x.i);
@@ -199,8 +226,19 @@ export function buildFleet(count: number): Truck[] {
       cur = next.pos;
     }
     const [model, refrigerated, capacityKg] = MODELS[k % MODELS.length];
+    // Load the truck only up to its capacity; the rest waits for another day/truck.
+    const lineSets: OrderLine[][] = [];
+    let loadKg = 0;
+    for (const inst of ordered) {
+      const lines = makeLines(inst.type, r);
+      const kg = lines.reduce((sum, l) => sum + l.qty, 0);
+      if (lineSets.length > 0 && loadKg + kg > capacityKg) break;
+      lineSets.push(lines);
+      loadKg += kg;
+    }
+    ordered.length = lineSets.length;
     const speed = isCity ? 28 : 52;
-    const departAt = 6 * 60 + 25 + k * 8;
+    const departAt = 6 * 60 + 25 + departRank[k] * 8;
     let t = departAt;
     let from: LngLat = WAREHOUSE;
     let total = 0;
@@ -208,7 +246,7 @@ export function buildFleet(count: number): Truck[] {
       const km = haversineKm(from, inst.pos) * 1.3;
       total += km;
       t += (km / speed) * 60;
-      const lines = makeLines(inst.type, r);
+      const lines = lineSets[s];
       const weightKg = lines.reduce((sum, l) => sum + l.qty, 0);
       const arriveAt = t;
       t += DWELL_MIN + weightKg / 60;
@@ -223,14 +261,16 @@ export function buildFleet(count: number): Truck[] {
       id: `T${k + 1}`,
       number: k + 1,
       label: `Mașina ${k + 1}`,
-      plate: "",
+      plate: REAL_FLEET[k]?.plate ?? "",
+      trackerId: REAL_FLEET[k]?.tracker ?? "",
+      gpsOk: REAL_FLEET[k]?.gps ?? false,
       model,
       refrigerated,
       capacityKg,
       driver: DRIVERS[k % DRIVERS.length],
       phone: `+373 6${Math.floor(r() * 9)} ${100 + Math.floor(r() * 899)} ${100 + Math.floor(r() * 899)}`,
       color: truckColor(k),
-      dock: (k % DOCK_COUNT) + 1,
+      dock: (departRank[k] % DOCK_COUNT) + 1,
       region: isCity ? `Chișinău · ${cityDirs[k % cityDirs.length]}` : regionTowns.slice(0, 2).join(", "),
       loadStart: departAt - 45,
       departAt,

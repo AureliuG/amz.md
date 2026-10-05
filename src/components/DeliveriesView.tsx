@@ -145,6 +145,7 @@ export function DeliveriesView() {
                     <td className="px-3 py-2">
                       <button onClick={() => select({ kind: "truck", id: tr.id })} className="inline-flex items-center gap-1.5 text-slate-700 hover:text-blue-700">
                         <TruckBadge truck={tr} size={18} /> <span className="whitespace-nowrap">{tr.label}</span>
+                        {tr.plate && <span className="whitespace-nowrap text-[10.5px] text-slate-400">{tr.plate}</span>}
                         <span className="text-[10.5px] text-slate-400">· {i + 1}</span>
                       </button>
                     </td>

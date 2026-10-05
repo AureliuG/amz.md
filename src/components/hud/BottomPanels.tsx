@@ -100,8 +100,16 @@ export function FleetPanel() {
               return (
                 <button key={tr.id} onClick={() => select({ kind: "truck", id: tr.id })} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left hover:bg-slate-50">
                   <TruckBadge truck={tr} />
-                  <span className="w-[66px] shrink-0 text-[11.5px] font-semibold text-slate-800">{tr.label}</span>
+                  <span className="w-[66px] shrink-0 leading-tight">
+                    <span className="block text-[11.5px] font-semibold text-slate-800">{tr.label}</span>
+                    <span className="block text-[9.5px] text-slate-400">{tr.plate || "—"}</span>
+                  </span>
                   <span className="min-w-0 flex-1 truncate text-[10.5px] text-slate-500">{tr.region}</span>
+                  {!tr.gpsOk && (
+                    <span title="Tracker-ul GPS nu a transmis niciodată" className="shrink-0 rounded bg-rose-50 px-1 text-[9.5px] font-semibold text-rose-600 ring-1 ring-rose-200">
+                      fără GPS
+                    </span>
+                  )}
                   <Chip tone={STATUS_TONE[st.status]}>{STATUS_LABEL[st.status]}</Chip>
                   <span className="w-[44px] shrink-0">
                     <Bar value={st.delivered / tr.stops.length} tone="green" />

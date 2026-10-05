@@ -62,7 +62,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
     const load = tr.stops.reduce((a, s) => a + s.weightKg, 0);
     return (
       <>
-        <Header icon={<TruckBadge truck={tr} size={40} />} kicker={`Mașină · ${tr.region}`} title={tr.label} sub={`${tr.driver} · ${tr.model}`} />
+        <Header icon={<TruckBadge truck={tr} size={40} />} kicker={`Mașină · ${tr.region}`} title={tr.plate ? `${tr.label} · ${tr.plate}` : tr.label} sub={`${tr.driver} · ${tr.model}`} />
         <div className="mb-2 flex items-center gap-2">
           <Chip tone={STATUS_TONE[st.status]}>{STATUS_LABEL[st.status]}</Chip>
           <span className="truncate text-[11px] text-slate-500">
@@ -79,6 +79,19 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
           {st.delivered}/{tr.stops.length} opriri livrate
         </div>
         <Row k="Nr. înmatriculare" v={tr.plate || <span className="text-slate-400">de completat</span>} />
+        <Row
+          k="GPS"
+          v={
+            tr.trackerId ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-slate-400">tracker {tr.trackerId}</span>
+                {tr.gpsOk ? <Chip tone="green">semnal activ</Chip> : <Chip tone="red">fără semnal</Chip>}
+              </span>
+            ) : (
+              <span className="text-slate-400">neînregistrat</span>
+            )
+          }
+        />
         <Row k="Încărcătură" v={`${load} kg / ${tr.capacityKg} kg`} />
         <Row k="Traseu" v={`${tr.totalKm} km · ${fmtTime(tr.departAt)}–${fmtTime(tr.returnAt)}`} />
         {next && st.status !== "done" && <Row k="Următoarea sosire" v={`${fmtTime(next.arriveAt)} (${fmtDur(next.arriveAt - t)})`} />}

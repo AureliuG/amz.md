@@ -207,7 +207,7 @@ export default function MoldovaMap() {
         const div = document.createElement("div");
         div.className = "truck-marker";
         div.style.setProperty("--c", t.color);
-        div.innerHTML = `<div class="truck-dot"><span class="truck-arrow"></span>${t.number}</div><div class="truck-label">${t.label}</div>`;
+        div.innerHTML = `<div class="truck-dot"><span class="truck-arrow"></span>${t.number}</div><div class="truck-label">${t.label}${t.plate ? ` · ${t.plate}` : ""}</div>`;
         div.addEventListener("click", (e) => {
           e.stopPropagation();
           useUi.getState().select({ kind: "truck", id: t.id });

@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { buildFleet, DEFAULT_TRUCK_COUNT, MAX_TRUCKS } from "./seed";
 import type { Selection, Truck } from "./types";
 
-const FLEET_KEY = "nobilprest.truckCount";
+// v2: the default became the real 16-truck fleet, so older saved sizes are ignored.
+const FLEET_KEY = "nobilprest.truckCount.v2";
 
 export type View = "warehouse" | "map" | "deliveries" | "planning";
 
@@ -34,7 +35,7 @@ interface UiState {
 }
 
 export const DAY_START = 5 * 60 + 30;
-export const DAY_END = 18 * 60;
+export const DAY_END = 20 * 60;
 
 export const useUi = create<UiState>((set) => ({
   view: "warehouse",

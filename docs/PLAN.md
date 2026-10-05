@@ -16,7 +16,9 @@ plans and tracks real deliveries.
 - Drivers mostly use Android phones, and several use iPhones.
 - Stock is kept in the warehouse. First users: our own team, as an internal dashboard.
 - Company: **Nobil Prest**. The interface language is **Romanian**.
-- Trucks are identified by **number (Mașina 1–12)**, and more can be added. Models, plates and capacities will come later.
+- **16 vehicles**, numbered as in the GPS client (Mașina 1–16) with real plates and tracker IDs.
+  Trackers 4, 5 and 12 have never reported. See [INTEGRATIONS.md](INTEGRATIONS.md).
+- **1C version 7 (1C:Enterprise 7.7).** GPS via an existing provider ("GPS Client v1.4.2203.17").
 - Some routes are **fixed**, others are **planned fresh each day** (details to come).
 - No delivery time windows: deliveries are due **by 18:00** on the delivery day.
 - No signatures. Each delivery comes with an **invoice (factură)** from 1C, so the driver app only needs
@@ -126,12 +128,11 @@ so you can show it before the real integrations exist.
 
 ## 8. Open questions
 
-1. **Warehouse location**: the Google Maps short link can't be opened from the build environment.
-   Send the coordinates (long-press the pin in Google Maps and copy the two numbers) or the street address.
-2. Per truck: model, plate, capacity (kg/pallets), refrigerated or not, usual driver.
-3. Which routes are fixed (truck → weekday → institutions) and which are planned daily.
-4. 1C configuration and version, and whether an export of orders, institutions (with addresses) and stock is possible.
-5. The list of the ~800 institutions with addresses/coordinates.
+1. **Warehouse location**: coordinates or address (the Google Maps short link can't be opened here).
+2. **GPS provider**: name and contact, tracker model, and whether they have an API or retransmission.
+3. **1C 7.7**: file (DBF) or SQL version, who maintains it, and a sample export (orders, institutions, stock).
+4. Per truck: model, capacity, refrigerated or not, usual driver. Are all 16 delivery vehicles?
+5. Which routes are fixed (truck → weekday → institutions) and which are planned daily.
 
 ## 9. Original discovery questions (answered above where known)
 
