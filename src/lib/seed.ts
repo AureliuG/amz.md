@@ -214,7 +214,7 @@ export function buildFleet(count: number): Truck[] {
     const want = isCity ? 15 : meanKm[k] > 150 ? 7 : meanKm[k] > 90 ? 9 : 11;
     // Today's stops: a compact cluster around a random institution of the sector.
     const anchor = sector[Math.floor(r() * sector.length)];
-    const today = [...sector].sort((a, b) => haversineKm(a.i.pos, anchor.i.pos) - haversineKm(b.i.pos, anchor.i.pos)).slice(0, want).map((x) => x.i);
+    const today = !anchor ? [] : [...sector].sort((a, b) => haversineKm(a.i.pos, anchor.i.pos) - haversineKm(b.i.pos, anchor.i.pos)).slice(0, want).map((x) => x.i);
     // Nearest-neighbour ordering from the warehouse (VROOM will replace this).
     const ordered: Institution[] = [];
     let cur: LngLat = WAREHOUSE;
@@ -290,6 +290,47 @@ function makeLines(type: InstitutionType, r: () => number): OrderLine[] {
 
 export const INSTITUTIONS = makeInstitutions(800);
 export const INSTITUTION_BY_ID = new Map(INSTITUTIONS.map((i) => [i.id, i]));
+const DEMO_INSTITUTIONS = [...INSTITUTIONS];
+
+/** Where the institutions on screen come from. */
+export const DATA_SOURCE = { institutions: "demo" as "demo" | "import" };
+
+/**
+ * Swap the institution list (e.g. after an Excel import). The arrays/maps are updated in place so every
+ * module keeps the same references; callers then rebuild the fleet so routes use the new points.
+ * Pass null to go back to the demo institutions.
+ */
+export function replaceInstitutions(list: Institution[] | null) {
+  const next = list ?? DEMO_INSTITUTIONS;
+  INSTITUTIONS.splice(0, INSTITUTIONS.length, ...next);
+  INSTITUTION_BY_ID.clear();
+  next.forEach((i) => INSTITUTION_BY_ID.set(i.id, i));
+  DATA_SOURCE.institutions = list ? "import" : "demo";
+}
+
+export const DEFAULT_WAREHOUSE: LngLat = [WAREHOUSE[0], WAREHOUSE[1]];
+/** Move the warehouse (updated in place, like the institution list). */
+export function setWarehouse(pos: LngLat) {
+  WAREHOUSE[0] = pos[0];
+  WAREHOUSE[1] = pos[1];
+}
+
+/** Town centre by name, ignoring diacritics and case (used to place institutions without coordinates). */
+export function findTown(name: string): { name: string; pos: LngLat } | null {
+  const key = normalize(name);
+  if (!key) return null;
+  const t = TOWNS.find((x) => normalize(x[0]) === key) ?? TOWNS.find((x) => key.includes(normalize(x[0])));
+  return t ? { name: t[0], pos: [t[1], t[2]] } : null;
+}
+export const normalize = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9а-яё ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+export const insideMoldova = (p: LngLat) => pointInPolygon(p, ring);
 export const PRODUCT_BY_ID = new Map(PRODUCTS.map((p) => [p.id, p]));
 
 /** Orders already received from 1C for the next days (demo numbers). */

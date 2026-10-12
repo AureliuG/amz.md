@@ -51,6 +51,21 @@ GPS provider's server, so positions already reach a server we can read from. Opt
 Mapping is by tracker ID (6 digits) → truck. Once live, the simulated truck movement is replaced by
 real positions. Arrival at an institution is detected when the truck stays within about 150 m for 3 or more minutes.
 
+### Ready in the app: `POST /api/gps`
+
+The app already has an intake address for positions (`src/app/api/gps/route.ts`). The provider, or a small
+connector that polls the provider's API, sends one position or a list:
+
+```json
+[{ "tracker": "059166", "lat": 47.0245, "lng": 28.8322, "ts": "2026-10-12T08:15:00Z", "speed": 42, "heading": 180 }]
+```
+
+- Optional security: set the `GPS_INGEST_TOKEN` environment variable and send `Authorization: Bearer <token>`.
+- Also accepted: `id`/`imei` for the tracker, `latitude`/`longitude`/`lon`, and `course` for heading. `ts` can be ISO text or epoch seconds/ms.
+- The **Date** page → *GPS în timp real* → **Live GPS** shows each truck at its latest fix (green ring); fixes older than 15 min are ignored.
+- Test without the provider: `node scripts/gps-test-sender.mjs http://localhost:3000`.
+- Positions are kept in memory (latest per tracker) for now. History needs the database (next step).
+
 **What we need:** the GPS provider's name and contact, the tracker model, and whether they offer an API or
 retransmission.
 
@@ -63,6 +78,14 @@ retransmission.
 | **A. Scheduled export (recommended)** | A small 1C processing (`.ert`) that a 1C programmer adds, run on a schedule, writes orders, institutions and stock to CSV/XML in a shared folder. The connector uploads new files. | Safe, read-only, no changes to the 1C database. Data is as fresh as the export interval (e.g. 5–15 min). |
 | B. OLE automation | The connector opens 1C through COM (`V77.Application`) on the office PC and reads documents directly. | No 1C changes, but needs a Windows machine with 1C and a 1C user licence free. Fragile. |
 | C. Read the database | If 1C runs on **MS SQL**, read its tables (read-only user). If it is the **file (DBF)** version, read the DBF files. | Fast, but 1C 7.7 table and column names are coded (SC123, DH45…), so a 1C specialist must map them. |
+
+### Ready in the app: Excel/CSV import
+
+The **Date** page imports the institutions list from an `.xlsx` or `.csv` export (a template can be downloaded there).
+Columns are recognised by name (Romanian/Russian/English) and can be corrected. Rows with coordinates are placed exactly;
+the rest are placed at their town centre, and **Caută adresele** looks the addresses up in OpenStreetMap (1 per second).
+The imported list is saved in the browser and the demo routes are rebuilt on it. The warehouse location can be set
+there too (coordinates or a full Google Maps link).
 
 ### What we import
 

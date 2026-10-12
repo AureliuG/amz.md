@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { DAY_END, useUi } from "@/lib/store";
 import { FleetPanel, TrackingPanel } from "./hud/BottomPanels";
 import { DeliveriesView } from "./DeliveriesView";
+import { DataView } from "./DataView";
 import { PlanningView } from "./PlanningView";
 import { DetailPanel } from "./hud/DetailPanel";
 import { Kpis } from "./hud/Kpis";
@@ -71,19 +72,44 @@ function ViewControls() {
   );
 }
 
+/** Poll the GPS intake while live mode is on or the Date page is open. */
+function useLiveGps() {
+  const gpsMode = useUi((s) => s.gpsMode);
+  const view = useUi((s) => s.view);
+  useEffect(() => {
+    if (gpsMode !== "live" && view !== "data") return;
+    let stop = false;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/gps", { cache: "no-store" });
+        if (res.ok && !stop) useUi.getState().setLive((await res.json()).positions ?? {});
+      } catch {
+        // Offline: keep the last positions.
+      }
+    };
+    void poll();
+    const id = setInterval(poll, 10_000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [gpsMode, view]);
+}
+
 export function Dashboard() {
   useClock();
+  useLiveGps();
   const view = useUi((s) => s.view);
   useEffect(() => useUi.getState().loadSavedFleet(), []);
-  // Keyboard: Esc closes details, 1–4 switch pages, space plays/pauses the clock.
+  // Keyboard: Esc closes details, 1–5 switch pages, space plays/pauses the clock.
   useEffect(() => {
-    const views = ["warehouse", "map", "deliveries", "planning"] as const;
+    const views = ["warehouse", "map", "deliveries", "planning", "data"] as const;
     const onKey = (e: KeyboardEvent) => {
       const ui = useUi.getState();
       if (e.key === "Escape") return ui.select(null);
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key >= "1" && e.key <= "4") ui.setView(views[Number(e.key) - 1]);
+      if (e.key >= "1" && e.key <= "5") ui.setView(views[Number(e.key) - 1]);
       if (e.key === " ") {
         e.preventDefault();
         ui.setPlaying(!ui.playing);
@@ -109,6 +135,7 @@ export function Dashboard() {
             <MoldovaMap />
           </div>
         )}
+        {view === "data" && <DataView />}
         {(view === "deliveries" || view === "planning") && (
           <>
             {view === "deliveries" ? <DeliveriesView /> : <PlanningView />}
@@ -118,7 +145,7 @@ export function Dashboard() {
           </>
         )}
         {/* HUD: the overlay never blocks the scene except where panels are */}
-        <div className={`pointer-events-none absolute inset-0 z-10 flex ${view === "deliveries" || view === "planning" ? "hidden" : ""}`} data-hud>
+        <div className={`pointer-events-none absolute inset-0 z-10 flex ${view === "deliveries" || view === "planning" || view === "data" ? "hidden" : ""}`} data-hud>
           <div className="flex h-full w-full flex-col justify-between gap-3 p-3 sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <Kpis />

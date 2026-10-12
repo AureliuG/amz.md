@@ -141,6 +141,7 @@ export default function MoldovaMap() {
 
     const truckEls = new Map<string, { marker: maplibregl.Marker; el: HTMLDivElement; arrow: HTMLSpanElement }>();
     let lastMinute = -1;
+    let whMarker: maplibregl.Marker | null = null;
 
     map.on("load", () => {
       const { trucks, t } = useUi.getState();
@@ -191,7 +192,7 @@ export default function MoldovaMap() {
         e.stopPropagation();
         useUi.getState().select({ kind: "warehouse" });
       });
-      new maplibregl.Marker({ element: wh, anchor: "bottom" }).setLngLat(WAREHOUSE).addTo(map);
+      whMarker = new maplibregl.Marker({ element: wh, anchor: "bottom" }).setLngLat(WAREHOUSE).addTo(map);
 
       syncTrucks(useUi.getState().trucks);
     });
@@ -218,6 +219,10 @@ export default function MoldovaMap() {
     }
     const unsubFleet = useUi.subscribe((s, prev) => {
       if (s.trucks !== prev.trucks && map.getSource("routes")) syncTrucks(s.trucks);
+      if (s.dataVersion !== prev.dataVersion) {
+        whMarker?.setLngLat(WAREHOUSE);
+        (map.getSource("insts") as GeoJSONSource | undefined)?.setData(institutionFeatures(s.trucks, s.t));
+      }
     });
 
     map.on("click", (e) => {
@@ -228,20 +233,26 @@ export default function MoldovaMap() {
     let raf = 0;
     let pulseFrame = 0;
     const tick = () => {
-      const { t, selection, trucks } = useUi.getState();
+      const { t, selection, trucks, gpsMode, live } = useUi.getState();
+      const now = Date.now();
       if (map.isStyleLoaded() || map.getSource("insts")) {
         trucks.forEach((tr) => {
           const ref = truckEls.get(tr.id);
           if (!ref) return;
           const st = truckState(tr, t);
-          ref.marker.setLngLat(st.pos);
-          const away = !["parked", "loading", "done"].includes(st.status);
+          // Live mode: a fresh GPS fix (< 15 min) wins over the simulation.
+          const fix = gpsMode === "live" && tr.trackerId ? live[tr.trackerId] : undefined;
+          const isLive = !!fix && now - fix.ts < 15 * 60_000;
+          ref.marker.setLngLat(isLive ? [fix.lng, fix.lat] : st.pos);
+          ref.el.classList.toggle("is-live", isLive);
+          if (isLive && fix.heading !== undefined) ref.arrow.style.transform = `rotate(${fix.heading - map.getBearing()}deg)`;
+          const away = isLive || (gpsMode === "sim" && !["parked", "loading", "done"].includes(st.status));
           ref.el.classList.toggle("is-home", !away);
           ref.el.classList.toggle("is-selected", selection?.kind === "truck" && selection.id === tr.id);
           ref.el.classList.toggle("is-unloading", st.status === "unloading");
-          const moving = st.status === "driving" || st.status === "returning";
+          const moving = isLive ? (fix.speed ?? 0) > 3 && fix.heading !== undefined : st.status === "driving" || st.status === "returning";
           ref.el.classList.toggle("is-moving", moving);
-          if (moving) ref.arrow.style.transform = `rotate(${st.bearing - map.getBearing()}deg)`;
+          if (moving && !isLive) ref.arrow.style.transform = `rotate(${st.bearing - map.getBearing()}deg)`;
         });
         const minute = Math.floor(t);
         if (minute !== lastMinute) {

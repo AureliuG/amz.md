@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CalendarRange, ListChecks, Map as MapIcon, Pause, Play, Search, Warehouse } from "lucide-react";
+import { Bell, CalendarRange, Database, ListChecks, Map as MapIcon, Pause, Play, Search, Warehouse } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { eventsUntil, type EventKind } from "@/lib/events";
 import { INSTITUTIONS } from "@/lib/seed";
@@ -23,8 +23,8 @@ export function TopBar() {
       <div className="flex items-center gap-2 pr-2">
         <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-[#4d82ff] to-[#1f3fb3] text-[12px] font-bold tracking-tight text-white shadow">NP</div>
         <span className="leading-tight">
-          <span className="block text-[15px] font-semibold tracking-tight text-slate-900">Nobil Prest</span>
-          <span className="hidden text-[10px] text-slate-400 sm:block">Depozit & livrări</span>
+          <span className="block whitespace-nowrap text-[15px] font-semibold tracking-tight text-slate-900">Nobil Prest</span>
+          <span className="hidden whitespace-nowrap text-[10px] text-slate-400 xl:block">Depozit & livrări</span>
         </span>
       </div>
       <SearchBox />
@@ -35,11 +35,12 @@ export function TopBar() {
             ["map", "Moldova", MapIcon],
             ["deliveries", "Livrări", ListChecks],
             ["planning", "Program", CalendarRange],
+            ["data", "Date", Database],
           ] as const
         ).map(([v, label, Icon]) => (
           <button key={v} onClick={() => setView(v)} title={label} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition ${view === v ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
             <Icon size={14} />
-            <span className="hidden sm:inline">{label}</span>
+            <span className="hidden 2xl:inline">{label}</span>
           </button>
         ))}
       </div>
@@ -70,7 +71,8 @@ export function TopBar() {
         </div>
       </div>
       <ActivityBell />
-      <span className="hidden rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200 lg:inline">Date demo</span>
+      <LiveBadge />
+      <span className="hidden whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200 lg:inline">Date demo</span>
     </header>
   );
 }
@@ -99,7 +101,7 @@ function SearchBox() {
   }, [q, select, setView, fleet]);
 
   return (
-    <div className="relative hidden w-[min(320px,24vw)] md:block">
+    <div className="relative hidden w-[min(300px,22vw)] md:block">
       <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Caută mașini, șoferi, instituții…" className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 text-[12px] outline-none focus:border-blue-300 focus:bg-white" />
       {results.length > 0 && (
@@ -181,5 +183,19 @@ function ActivityBell() {
         </div>
       )}
     </div>
+  );
+}
+
+function LiveBadge() {
+  const gpsMode = useUi((s) => s.gpsMode);
+  const live = useUi((s) => s.live);
+  const trucks = useTrucks();
+  if (gpsMode !== "live") return null;
+  const now = Date.now();
+  const n = trucks.filter((t) => t.trackerId && live[t.trackerId] && now - live[t.trackerId].ts < 15 * 60_000).length;
+  return (
+    <span className="hidden items-center gap-1 whitespace-nowrap rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200 lg:inline-flex">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> GPS live · {n}/{trucks.length}
+    </span>
   );
 }

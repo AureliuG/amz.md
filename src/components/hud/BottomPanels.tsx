@@ -14,10 +14,12 @@ export function TrackingPanel() {
   const trucks = useTrucks();
   const sel = useUi((s) => s.selection);
   const select = useUi((s) => s.select);
+  const withStops = trucks.filter((x) => x.stops.length > 0);
   const truck =
-    (sel?.kind === "truck" && trucks.find((x) => x.id === sel.id)) ||
-    trucks.find((x) => ["loading", "departing", "driving", "unloading"].includes(truckState(x, t).status)) ||
-    trucks[0];
+    (sel?.kind === "truck" && withStops.find((x) => x.id === sel.id)) ||
+    withStops.find((x) => ["loading", "departing", "driving", "unloading"].includes(truckState(x, t).status)) ||
+    withStops[0];
+  if (!truck) return null;
   const st = truckState(truck, t);
   const idx = Math.min(st.stopIdx, truck.stops.length - 1);
   const stop = truck.stops[idx];

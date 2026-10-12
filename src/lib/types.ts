@@ -10,6 +10,12 @@ export interface Institution {
   pos: LngLat;
   /** Latest time (minutes from midnight) the delivery should arrive. */
   windowEnd: number;
+  /** How the position was obtained: exact coordinates, approximated from the town, or geocoded from the address. */
+  precision?: "exact" | "town" | "geocoded";
+  address?: string;
+  phone?: string;
+  /** Code in 1C, when imported. */
+  code?: string;
 }
 
 export type StorageZone = "cellar" | "cold" | "dry";
