@@ -68,6 +68,9 @@ export function DriverApp() {
 
   const refresh = useCallback(async () => {
     setPending(await flushQueue());
+    // The office may have moved orders between trucks: reload today's routes too.
+    const ui = useUi.getState();
+    if (ui.storage === "server") void ui.fetchDay(ui.day);
     try {
       const res = await fetch(api("/api/events"), { cache: "no-store" });
       if (res.ok) setServer((await res.json()).confirmations ?? {});
@@ -223,7 +226,7 @@ export function DriverApp() {
                   <summary className="cursor-pointer text-slate-500">Produse ({s.lines.length})</summary>
                   <ul className="mt-1 space-y-0.5">
                     {s.lines.map((l) => {
-                      const p = PRODUCT_BY_ID.get(l.productId)!;
+                      const p = PRODUCT_BY_ID.get(l.productId) ?? { name: l.productId, unit: "kg", color: "#cbd5e1" };
                       return (
                         <li key={l.productId} className="flex justify-between">
                           <span>{p.name}</span>

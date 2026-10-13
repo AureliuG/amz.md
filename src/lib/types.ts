@@ -37,6 +37,8 @@ export interface OrderLine {
 
 export interface Stop {
   id: string;
+  /** The order this stop delivers (Order.id) and its number shown to people and drivers. */
+  orderId: string;
   orderNo: string;
   institutionId: string;
   lines: OrderLine[];
@@ -64,7 +66,50 @@ export interface TruckInfo {
   routeType: "fix" | "zilnic";
   /** Inactive vehicles (service, no driver) are kept on file but not planned. */
   active: boolean;
+  /** Fixed route: localities this vehicle always serves, comma-separated (e.g. "Orhei, Rezina"). */
+  towns?: string;
   notes?: string;
+}
+
+/** An order from an institution: taken by phone and registered on the Comenzi page (later also from 1C). */
+export interface Order {
+  id: string;
+  /** Number shown everywhere, on the sheets and on the driver's phone (e.g. "CMD-00042"). */
+  no: string;
+  institutionId: string;
+  /** Delivery day, YYYY-MM-DD. */
+  date: string;
+  lines: OrderLine[];
+  note?: string;
+  status: "noua" | "anulata";
+  /** When it was registered (epoch ms). */
+  createdAt: number;
+  /** telefon = typed in by the office; test = generated to try the app; demo = example, never saved; 1c = imported. */
+  source: "telefon" | "test" | "demo" | "1c";
+  /** Invoice (factură) number from 1C, when known. */
+  invoiceNo?: string;
+}
+
+/** The saved routes of one day: which orders each vehicle carries, in delivery order. */
+export interface DayPlan {
+  date: string;
+  routes: { truck: number; orderIds: string[] }[];
+  /** Approved by the dispatcher: new orders for that day then wait in "neplanificate" instead of reshuffling routes. */
+  approved: boolean;
+  /** Vehicles whose loading the warehouse confirmed (truck number → epoch ms). Stock is taken out at that moment. */
+  loaded: Record<string, number>;
+  updatedAt: number;
+}
+
+/** A change of stock: goods received, loaded onto a truck, or corrected after counting. */
+export interface StockMove {
+  id: string;
+  ts: number;
+  type: "intrare" | "iesire" | "corectie";
+  lines: OrderLine[];
+  note?: string;
+  /** Unique reference (e.g. "incarcare:2026-10-14:3") so the same loading is never taken out twice. */
+  ref?: string;
 }
 
 /** What a driver reported for a delivery (from the Șofer page). Keyed by order number. */
@@ -93,12 +138,14 @@ export interface Truck {
   driver: string;
   phone: string;
   routeType: "fix" | "zilnic";
-  /** Orders of this truck's area that did not fit within its capacity today. */
-  leftover: { count: number; kg: number };
   color: string;
-  dock: number;
   region: string;
+  /** Loading: first at the beci (vegetables and fruit, if any), then at the single ramp of the depot. */
   loadStart: number;
+  beci: { from: number; to: number } | null;
+  ramp: { from: number; to: number };
+  /** Position in the day's loading queue (1 = first). */
+  loadOrder: number;
   departAt: number;
   returnAt: number;
   totalKm: number;
@@ -127,7 +174,7 @@ export type StopStatus = "planned" | "next" | "unloading" | "delivered";
 export type Selection =
   | { kind: "truck"; id: string }
   | { kind: "institution"; id: string }
-  | { kind: "dock"; id: number }
+  | { kind: "dock"; id: "rampa" | "beci" }
   | { kind: "zone"; id: StorageZone | "office" }
   | { kind: "warehouse" }
   | null;

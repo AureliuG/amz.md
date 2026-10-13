@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 const started = Date.now();
 
 export async function GET() {
-  const [data, institutions, settings, fleet, gps, eventsToday, eventDays, feedback] = await Promise.all([
+  const [data, institutions, settings, fleet, gps, eventsToday, eventDays, feedback, orderDays] = await Promise.all([
     dataDirStatus(),
     readJson<Institution[] | null>("institutions.json", null),
     readJson<{ warehouse: LngLat | null }>("settings.json", { warehouse: null }),
@@ -23,6 +23,7 @@ export async function GET() {
     readLog<unknown>("events", dayOf()),
     listDays("events"),
     readJson<Feedback[]>("feedback.json", []),
+    listDays("orders", ".json"),
   ]);
   const day = 24 * 3600_000;
   const fixes = Object.values(gps);
@@ -43,6 +44,7 @@ export async function GET() {
         phonesLastDay: fixes.filter((f) => f.source === "phone" && Date.now() - f.ts < day).length,
       },
       confirmations: { today: eventsToday.length, days: eventDays.length },
+      orders: { days: orderDays.length },
       feedback: { total: feedback.length, open: feedback.filter((f) => f.status === "nou" || f.status === "in-lucru").length },
     },
     { headers: { "Cache-Control": "no-store" } },

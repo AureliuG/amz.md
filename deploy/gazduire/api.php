@@ -152,6 +152,114 @@ function np_count_fixes($fixes, $phone, $since)
     return $n;
 }
 
+
+/* ---------- orders, plans, stock (same checks as src/lib/server/validate.ts) ---------- */
+
+function np_qty($q)
+{
+    $q = round($q * 1000) / 1000;
+    return floor($q) == $q && abs($q) < 1e15 ? (int) $q : $q;
+}
+
+/** Order or stock lines: 1–300 products with a positive quantity (zero allowed for inventory). */
+function np_clean_lines($v, $allowZero = false)
+{
+    if (!is_array($v) || count($v) < 1 || count($v) > 300) return null;
+    $out = array();
+    foreach ($v as $l) {
+        $id = np_get($l, 'productId');
+        $q = np_get($l, 'qty');
+        if (!is_string($id) || $id === '' || !np_is_num($q) || $q < 0 || (!$allowZero && $q == 0) || $q > 1e6) return null;
+        $out[] = array('productId' => substr($id, 0, 64), 'qty' => np_qty($q));
+    }
+    return $out;
+}
+
+function np_clean_order($b)
+{
+    $inst = np_get($b, 'institutionId');
+    $date = np_get($b, 'date');
+    if (!is_object($b) || !is_string($inst) || $inst === '' || !np_is_day($date)) return null;
+    $lines = np_clean_lines(np_get($b, 'lines'));
+    if ($lines === null) return null;
+    $o = array('institutionId' => substr($inst, 0, 64), 'date' => $date, 'lines' => $lines);
+    $note = np_clip(np_get($b, 'note'), 500);
+    if ($note !== '') $o['note'] = $note;
+    $o['source'] = in_array(np_get($b, 'source'), array('telefon', 'test', '1c'), true) ? $b->source : 'telefon';
+    $inv = np_clip(np_get($b, 'invoiceNo'), 40);
+    if ($inv !== '') $o['invoiceNo'] = $inv;
+    return $o;
+}
+
+function np_orders_file($date)
+{
+    return "orders/$date.json";
+}
+
+function np_new_id($prefix)
+{
+    return $prefix . base_convert((string) np_now(), 10, 36) . substr(base_convert(np_rand_hex(4), 16, 36), 0, 4);
+}
+
+/** Reserve `count` consecutive order numbers (CMD-00001…). */
+function np_order_numbers($count)
+{
+    $c = np_update('orders-counter.json', null, function ($cur) use ($count) {
+        return array('n' => (int) np_get($cur, 'n', 0) + $count);
+    });
+    $out = array();
+    for ($i = 0; $i < $count; $i++) $out[] = 'CMD-' . str_pad((string) ($c['n'] - $count + 1 + $i), 5, '0', STR_PAD_LEFT);
+    return $out;
+}
+
+/** An order with its fields in the same order as the Node server (id, no, …, status, createdAt). */
+function np_order_record($id, $no, $input, $status, $createdAt)
+{
+    return array_merge(array('id' => $id, 'no' => $no), $input, array('status' => $status, 'createdAt' => $createdAt));
+}
+
+function np_list($v)
+{
+    return is_array($v) ? $v : array();
+}
+
+function np_clean_plan($p, $date)
+{
+    $routesIn = np_get($p, 'routes');
+    if (!is_object($p) || !is_array($routesIn) || count($routesIn) > 100) return null;
+    $routes = array();
+    foreach ($routesIn as $r) {
+        $truck = np_get($r, 'truck');
+        $ids = np_get($r, 'orderIds');
+        if (!is_int($truck) || $truck < 1 || !is_array($ids) || count($ids) > 500) return null;
+        $clean = array();
+        foreach ($ids as $x) {
+            if (!is_string($x)) return null;
+            $clean[] = substr($x, 0, 64);
+        }
+        $routes[] = array('truck' => $truck, 'orderIds' => $clean);
+    }
+    $loaded = new stdClass();
+    foreach ((array) np_get($p, 'loaded', array()) as $k => $ts) {
+        if (preg_match('/^\d+$/', (string) $k) && np_is_num($ts)) $loaded->$k = $ts;
+    }
+    return array('date' => $date, 'routes' => $routes, 'approved' => (bool) np_get($p, 'approved', false), 'loaded' => $loaded, 'updatedAt' => np_now());
+}
+
+function np_clean_move($m)
+{
+    $type = np_get($m, 'type');
+    if (!in_array($type, array('intrare', 'iesire', 'corectie'), true)) return null;
+    $lines = np_clean_lines(np_get($m, 'lines'), $type === 'corectie');
+    if ($lines === null) return null;
+    $out = array('type' => $type, 'lines' => $lines);
+    $note = np_clip(np_get($m, 'note'), 300);
+    if ($note !== '') $out['note'] = $note;
+    $ref = np_clip(np_get($m, 'ref'), 80);
+    if ($ref !== '') $out['ref'] = $ref;
+    return $out;
+}
+
 $route = trim((string) np_get($_GET, 'r', ''), '/');
 $method = (string) np_get($_SERVER, 'REQUEST_METHOD', 'GET');
 
@@ -167,7 +275,7 @@ if ($route === 'gps' && $method === 'POST' && np_cfg('cheie_gps') !== '') {
     np_send(array('error' => 'Introduceți codul de acces.'), 401);
 } elseif ($role === 'driver') {
     // Drivers: their page's calls, reading the plan and sending suggestions.
-    $ok = $route === 'events' || strpos($route, 'driver/') === 0 || ($route === 'state' && $method === 'GET') || ($route === 'feedback' && $method === 'POST');
+    $ok = $route === 'events' || strpos($route, 'driver/') === 0 || ($method === 'GET' && in_array($route, array('state', 'orders', 'plan'), true)) || ($route === 'feedback' && $method === 'POST');
     if (!$ok) np_send(array('error' => 'Acces doar la pagina Șofer'), 403);
 }
 
@@ -334,6 +442,187 @@ switch ("$method $route") {
         if ($found) np_send(array('ok' => true));
         np_send(array('error' => 'not found'), 404);
 
+    /* Orders (Comenzi), one file per delivery day. Only GET and POST: some hosts block PUT/DELETE. */
+    case 'GET orders':
+        $day = np_is_day(np_get($_GET, 'date')) ? $_GET['date'] : np_day();
+        np_send(array('date' => $day, 'orders' => np_list(np_read(np_orders_file($day), array()))));
+
+    case 'POST orders':
+        $b = np_body();
+        if (!is_object($b)) np_send(array('error' => 'invalid JSON'), 400);
+        $action = np_get($b, 'action');
+        if ($action === 'create') {
+            $input = np_clean_order(np_get($b, 'order'));
+            if (!$input) np_send(array('error' => 'Comanda nu este completă (instituția, data și cel puțin un produs).'), 400);
+            $nos = np_order_numbers(1);
+            $order = np_order_record(np_new_id('O'), $nos[0], $input, 'noua', np_now());
+            np_update(np_orders_file($input['date']), array(), function ($list) use ($order) {
+                $list = np_list($list);
+                $list[] = $order;
+                return $list;
+            });
+            np_send(array('ok' => true, 'order' => $order));
+        }
+        if ($action === 'bulk') {
+            $raw = np_get($b, 'orders');
+            $list = array();
+            foreach (is_array($raw) ? array_slice($raw, 0, 1500) : array() as $o) {
+                $c = np_clean_order($o);
+                if (!$c) np_send(array('error' => 'invalid orders'), 400);
+                $list[] = $c;
+            }
+            if (!$list) np_send(array('error' => 'invalid orders'), 400);
+            $nos = np_order_numbers(count($list));
+            $now = np_now();
+            $byDate = array();
+            foreach ($list as $i => $c) $byDate[$c['date']][] = np_order_record(np_new_id('O') . $i, $nos[$i], $c, 'noua', $now);
+            foreach ($byDate as $date => $add) {
+                np_update(np_orders_file($date), array(), function ($cur) use ($add) {
+                    return array_merge(np_list($cur), $add);
+                });
+            }
+            np_send(array('ok' => true, 'created' => count($list)));
+        }
+        if ($action === 'update') {
+            $id = np_clip(np_get($b, 'id'), 64);
+            $date = np_get($b, 'date');
+            $patch = np_get($b, 'patch', new stdClass());
+            if ($id === '' || !np_is_day($date)) np_send(array('error' => 'id and date required'), 400);
+            $lines = property_exists($patch, 'lines') ? np_clean_lines($patch->lines) : false;
+            if ($lines === null) np_send(array('error' => 'invalid lines'), 400);
+            $status = np_get($patch, 'status');
+            if ($status !== null && $status !== 'noua' && $status !== 'anulata') np_send(array('error' => 'invalid status'), 400);
+            $newDate = property_exists($patch, 'date') ? $patch->date : $date;
+            if (!np_is_day($newDate)) np_send(array('error' => 'invalid date'), 400);
+            $found = null;
+            np_update(np_orders_file($date), array(), function ($list) use ($id, $patch, $lines, $status, $newDate, $date, &$found) {
+                $out = array();
+                foreach (np_list($list) as $o) {
+                    if (np_get($o, 'id') !== $id) {
+                        $out[] = $o;
+                        continue;
+                    }
+                    if ($lines !== false) $o->lines = $lines;
+                    if (property_exists($patch, 'note')) {
+                        $n = np_clip($patch->note, 500);
+                        if ($n === '') unset($o->note);
+                        else $o->note = $n;
+                    }
+                    if ($status !== null) $o->status = $status;
+                    if (property_exists($patch, 'invoiceNo')) {
+                        $inv = np_clip($patch->invoiceNo, 40);
+                        if ($inv === '') unset($o->invoiceNo);
+                        else $o->invoiceNo = $inv;
+                    }
+                    $inst = np_get($patch, 'institutionId');
+                    if (is_string($inst) && $inst !== '') $o->institutionId = substr($inst, 0, 64);
+                    $o->date = $newDate;
+                    $found = $o;
+                    if ($newDate === $date) $out[] = $o;
+                }
+                return $out;
+            });
+            if (!$found) np_send(array('error' => 'not found'), 404);
+            if ($newDate !== $date) {
+                np_update(np_orders_file($newDate), array(), function ($list) use ($found) {
+                    $list = np_list($list);
+                    $list[] = $found;
+                    return $list;
+                });
+            }
+            np_send(array('ok' => true, 'order' => $found));
+        }
+        if ($action === 'delete-test') {
+            $date = np_get($b, 'date');
+            if (!np_is_day($date)) np_send(array('error' => 'date required'), 400);
+            $removed = 0;
+            np_update(np_orders_file($date), array(), function ($list) use (&$removed) {
+                $keep = array();
+                foreach (np_list($list) as $o) {
+                    if (np_get($o, 'source') === 'test') $removed++;
+                    else $keep[] = $o;
+                }
+                return $keep;
+            });
+            np_send(array('ok' => true, 'removed' => $removed));
+        }
+        np_send(array('error' => 'unknown action'), 400);
+
+    /* Saved routes of a day (null = automatic). */
+    case 'GET plan':
+        $day = np_is_day(np_get($_GET, 'date')) ? $_GET['date'] : np_day();
+        np_send(array('date' => $day, 'plan' => np_read("plans/$day.json", null)));
+
+    case 'POST plan':
+        $b = np_body();
+        $date = np_get($b, 'date');
+        if (!is_object($b) || !np_is_day($date) || !property_exists($b, 'plan')) np_send(array('error' => 'date and plan required'), 400);
+        $plan = $b->plan === null ? null : np_clean_plan($b->plan, $date);
+        if ($b->plan !== null && !$plan) np_send(array('error' => 'invalid plan'), 400);
+        np_write("plans/$date.json", $plan);
+        np_send(array('ok' => true, 'plan' => $plan));
+
+    /* Stock levels, movements and the product list. */
+    case 'GET stock':
+        $stock = np_read('stock.json', null);
+        $moves = np_list(np_read('stock-moves.json', array()));
+        np_send(array('levels' => np_get($stock, 'levels'), 'products' => np_read('products.json', null), 'moves' => array_reverse(array_slice($moves, -300))));
+
+    case 'POST stock':
+        $b = np_body();
+        if (!is_object($b)) np_send(array('error' => 'invalid JSON'), 400);
+        $action = np_get($b, 'action');
+        if ($action === 'move') {
+            $m = np_clean_move(np_get($b, 'move'));
+            if (!$m) np_send(array('error' => 'invalid move'), 400);
+            if (isset($m['ref'])) {
+                foreach (np_list(np_read('stock-moves.json', array())) as $x) {
+                    if (np_get($x, 'ref') === $m['ref']) np_send(array('ok' => true, 'duplicate' => true));
+                }
+            }
+            $base = array();
+            foreach ((array) np_get($b, 'base', array()) as $k => $v) if (np_is_num($v)) $base[substr((string) $k, 0, 64)] = $v;
+            $move = array_merge(array('id' => np_new_id('M'), 'ts' => np_now()), $m);
+            $next = np_update('stock.json', null, function ($cur) use ($move, $base) {
+                $levels = np_get($cur, 'levels');
+                $levels = $levels === null ? $base : (array) $levels;
+                foreach ($move['lines'] as $l) {
+                    $have = isset($levels[$l['productId']]) ? $levels[$l['productId']] : 0;
+                    $q = $move['type'] === 'intrare' ? $have + $l['qty'] : ($move['type'] === 'iesire' ? $have - $l['qty'] : $l['qty']);
+                    $levels[$l['productId']] = np_qty($q);
+                }
+                return array('levels' => (object) $levels, 'updatedAt' => np_now());
+            });
+            np_update('stock-moves.json', array(), function ($list) use ($move) {
+                $list = np_list($list);
+                $list[] = $move;
+                return array_slice($list, -5000);
+            });
+            np_send(array('ok' => true, 'move' => $move, 'levels' => $next['levels']));
+        }
+        if ($action === 'products') {
+            if (!property_exists($b, 'products')) np_send(array('error' => 'products required'), 400);
+            if ($b->products === null) {
+                np_write('products.json', null);
+                np_send(array('ok' => true));
+            }
+            $list = np_get($b, 'products');
+            if (!is_array($list) || count($list) > 2000) np_send(array('error' => 'invalid products'), 400);
+            $out = array();
+            foreach ($list as $p) {
+                $id = np_clip(np_get($p, 'id'), 64);
+                $name = np_clip(np_get($p, 'name'), 120);
+                if ($id === '' || $name === '' || !in_array(np_get($p, 'zone'), array('cellar', 'cold', 'dry'), true) || !in_array(np_get($p, 'unit'), array('kg', 'l', 'pcs'), true) || !np_is_num(np_get($p, 'min')) || !np_is_num(np_get($p, 'stock'))) {
+                    np_send(array('error' => 'invalid product ' . ($id !== '' ? $id : '?')), 400);
+                }
+                $color = (string) np_get($p, 'color', '');
+                $out[] = array('id' => $id, 'name' => $name, 'zone' => $p->zone, 'unit' => $p->unit, 'min' => $p->min, 'stock' => $p->stock, 'color' => preg_match('/^#[0-9a-f]{6}$/i', $color) ? $color : '#cbd5e1');
+            }
+            np_write('products.json', $out);
+            np_send(array('ok' => true));
+        }
+        np_send(array('error' => 'unknown action'), 400);
+
     /* Setup status for the "Primii pași" checklist (never the secrets themselves). */
     case 'GET info':
         $fleet = np_read('fleet.json', null);
@@ -361,6 +650,7 @@ switch ("$method $route") {
                 'phonesLastDay' => np_count_fixes($fixes, true, $dayAgo),
             ),
             'confirmations' => array('today' => count(np_read_log('events', np_day())), 'days' => count(np_list_days('events'))),
+            'orders' => array('days' => count(glob(np_data_dir() . '/orders/*.json') ?: array())),
             'feedback' => array('total' => count($feedback), 'open' => $open),
         ));
 }

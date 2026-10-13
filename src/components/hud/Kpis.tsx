@@ -3,6 +3,7 @@
 import { CheckCircle2, Clock, PackageX, Truck } from "lucide-react";
 import { PRODUCTS } from "@/lib/seed";
 import { fleetSummary } from "@/lib/sim";
+import { levelOf } from "@/lib/stock";
 import { useMinute, useTrucks, useUi } from "@/lib/store";
 import { Card } from "./ui";
 
@@ -11,7 +12,8 @@ export function Kpis() {
   const trucks = useTrucks();
   const confirmations = useUi((s) => s.confirmations);
   const f = fleetSummary(trucks, t, confirmations);
-  const low = PRODUCTS.filter((p) => p.stock < p.min).length;
+  const levels = useUi((s) => s.levels);
+  const low = PRODUCTS.filter((p) => levelOf(levels, p.id) < p.min).length;
   const items = [
     { icon: CheckCircle2, label: "Livrate azi", value: `${f.delivered}`, sub: `din ${f.planned} opriri · ${(f.kgDelivered / 1000).toFixed(1)} t` },
     { icon: Truck, label: "Mașini pe drum", value: `${f.onRoad}`, sub: `${f.atWarehouse} la depozit` },

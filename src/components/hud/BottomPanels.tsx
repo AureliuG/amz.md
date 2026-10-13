@@ -3,8 +3,11 @@
 import { Check, ChevronRight, ClipboardList, Minus, PackageCheck, PackageOpen, Phone, Plus, Truck as TruckIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { demandByProduct } from "@/lib/alerts";
-import { DOCK_COUNT, INSTITUTION_BY_ID, MAX_TRUCKS, PIPELINE, PRODUCTS } from "@/lib/seed";
-import { STATUS_LABEL, STATUS_TONE, fmtTime, truckState } from "@/lib/sim";
+import { dayLabel, nextWorkday } from "@/lib/dates";
+import { orderKg } from "@/lib/planner";
+import { INSTITUTION_BY_ID, MAX_TRUCKS, PRODUCTS } from "@/lib/seed";
+import { loadingPlace, PLACE_LABEL, STATUS_LABEL, STATUS_TONE, fmtTime, truckState } from "@/lib/sim";
+import { levelOf } from "@/lib/stock";
 import { useMinute, useTrucks, useUi } from "@/lib/store";
 import { StockList, TruckBadge } from "./DetailPanel";
 import { Bar, Card, Chip } from "./ui";
@@ -81,11 +84,12 @@ export function FleetPanel() {
   const removeLastTruck = useUi((s) => s.removeLastTruck);
   const fleetSize = useUi((s) => s.fleet.length);
   const select = useUi((s) => s.select);
+  const levels = useUi((s) => s.levels);
   const demand = useMemo(() => demandByProduct(trucks), [trucks]);
-  const low = PRODUCTS.filter((p) => p.stock < p.min || (demand.get(p.id) ?? 0) > p.stock).length;
+  const low = PRODUCTS.filter((p) => levelOf(levels, p.id) < p.min || (demand.get(p.id) ?? 0) > levelOf(levels, p.id)).length;
   const tabs: [Tab, string][] = [
     ["trucks", `Mașini ${trucks.length}`],
-    ["docks", `Rampe ${DOCK_COUNT}`],
+    ["docks", "Încărcare"],
     ["stock", `Stoc${low ? ` · ${low}⚠` : ""}`],
     ["orders", "Comenzi"],
   ];
@@ -140,40 +144,65 @@ export function FleetPanel() {
           </>
         )}
         {tab === "docks" &&
-          Array.from({ length: DOCK_COUNT }, (_, i) => {
-            const now = trucks.find((x) => x.dock === i + 1 && t >= x.loadStart && t < x.departAt);
-            const nextT = trucks.filter((x) => x.dock === i + 1 && x.loadStart > t).sort((a, b) => a.loadStart - b.loadStart)[0];
+          (["beci", "rampa"] as const).map((place) => {
+            const now = trucks.find((x) => loadingPlace(x, t) === place);
+            const start = (x: (typeof trucks)[number]) => (place === "beci" ? x.beci?.from : x.ramp.from);
+            const nextT = trucks.filter((x) => x.stops.length && (start(x) ?? -1) > t).sort((a, b) => (start(a) ?? 0) - (start(b) ?? 0))[0];
+            const st = now && truckState(now, t);
+            const progress = now && st ? (place === "beci" ? (t - now.beci!.from) / (now.beci!.to - now.beci!.from) : (t - now.ramp.from) / (now.ramp.to - now.ramp.from)) : 0;
             return (
-              <button key={i} onClick={() => select({ kind: "dock", id: i + 1 })} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left hover:bg-slate-50">
-                <span className="w-8 text-[11.5px] font-semibold text-slate-800">R{i + 1}</span>
-                <span className="flex-1 text-[11px] text-slate-500">{now ? now.label : nextT ? `Următoarea: ${nextT.label} la ${fmtTime(nextT.loadStart)}` : "Nicio mașină planificată"}</span>
+              <button key={place} onClick={() => select({ kind: "dock", id: place })} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-2 text-left hover:bg-slate-50">
+                <span className="w-14 text-[11.5px] font-semibold text-slate-800">{place === "beci" ? "Beci" : "Rampa"}</span>
+                <span className="flex-1 text-[11px] text-slate-500">{now ? `${now.label} · ${PLACE_LABEL[place]}` : nextT ? `Următoarea: ${nextT.label} la ${fmtTime(start(nextT)!)}` : "Nicio mașină planificată"}</span>
                 {now ? (
                   <>
                     <Chip tone="amber">Se încarcă</Chip>
-                    <Bar value={truckState(now, t).progress} tone="amber" className="w-12" />
+                    <Bar value={progress} tone="amber" className="w-12" />
                   </>
                 ) : (
-                  <Chip tone="green">Liberă</Chip>
+                  <Chip tone="green">Liber</Chip>
                 )}
               </button>
             );
           })}
-        {tab === "stock" && <StockList demand={demand} items={[...PRODUCTS].sort((a, b) => (demand.get(b.id) ?? 0) / b.stock - (demand.get(a.id) ?? 0) / a.stock || a.stock / a.min - b.stock / b.min)} />}
-        {tab === "orders" && (
-          <div className="py-1">
-            <p className="px-1.5 pb-2 text-[11px] text-slate-500">Comenzi primite la telefon și introduse în 1C, livrate peste 1–3 zile.</p>
-            {PIPELINE.map((p) => (
-              <div key={p.label} className="flex items-center gap-2 px-1.5 py-1.5 text-[11.5px]">
-                <span className="w-24 font-medium text-slate-700">{p.label}</span>
-                <Bar value={p.orders / 160} className="flex-1" />
-                <span className="w-28 text-right tabular-nums text-slate-500">
-                  {p.orders} comenzi · {(p.kg / 1000).toFixed(1)} t
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        {tab === "stock" && <StockList demand={demand} items={[...PRODUCTS].sort((a, b) => (demand.get(b.id) ?? 0) / Math.max(1, levelOf(levels, b.id)) - (demand.get(a.id) ?? 0) / Math.max(1, levelOf(levels, a.id)) || levelOf(levels, a.id) / a.min - levelOf(levels, b.id) / b.min)} />}
+        {tab === "orders" && <OrdersSummary />}
       </div>
     </Card>
+  );
+}
+
+/** Registered orders for today and the next delivery days (opens the Comenzi page). */
+function OrdersSummary() {
+  const day = useUi((s) => s.day);
+  const orders = useUi((s) => s.orders);
+  const setView = useUi((s) => s.setView);
+  const setWorkDate = useUi((s) => s.setWorkDate);
+  const days = [day, nextWorkday(day), nextWorkday(nextWorkday(day))];
+  const rows = days.map((d) => {
+    const list = (orders[d] ?? []).filter((o) => o.status !== "anulata");
+    return { d, n: list.length, kg: list.reduce((a, o) => a + orderKg(o), 0) };
+  });
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  return (
+    <div className="py-1">
+      <p className="px-1.5 pb-2 text-[11px] text-slate-500">Comenzi înregistrate (telefon), livrate în zilele următoare.</p>
+      {rows.map((r) => (
+        <button
+          key={r.d}
+          onClick={() => {
+            setWorkDate(r.d);
+            setView("orders");
+          }}
+          className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-[11.5px] hover:bg-slate-50"
+        >
+          <span className="w-24 font-medium text-slate-700">{dayLabel(r.d, day)}</span>
+          <Bar value={r.n / max} className="flex-1" />
+          <span className="w-28 text-right tabular-nums text-slate-500">
+            {r.n} comenzi · {(r.kg / 1000).toFixed(1)} t
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }

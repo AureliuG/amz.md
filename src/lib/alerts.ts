@@ -2,10 +2,12 @@
  * Things the dispatcher should look at, derived from today's plan, stock, GPS and driver reports.
  * Each alert says what is wrong and, where possible, what to do.
  */
+import { truckLoadKg } from "./planner";
 import { DELIVER_BY, INSTITUTION_BY_ID, PRODUCT_BY_ID, PRODUCTS } from "./seed";
 import { fmtTime, truckState } from "./sim";
+import { fmtQty, levelOf, unitLabel, type Levels } from "./stock";
 import { liveFix, type LivePos } from "./store";
-import type { Confirmation, Selection, Truck } from "./types";
+import type { Confirmation, Order, Selection, Truck } from "./types";
 
 export type Severity = "high" | "medium" | "info";
 
@@ -24,15 +26,14 @@ export function demandByProduct(trucks: Truck[]): Map<string, number> {
   return m;
 }
 
-const unitLabel = (u: string) => (u === "pcs" ? "buc" : u);
-const fmtQty = (n: number) => Math.round(n).toLocaleString("ro-MD");
 
 export function computeAlerts(
   trucks: Truck[],
   t: number,
-  opts: { gpsMode: "sim" | "live"; live: Record<string, LivePos>; confirmations: Record<string, Confirmation>; now: number },
+  opts: { gpsMode: "sim" | "live"; live: Record<string, LivePos>; confirmations: Record<string, Confirmation>; now: number; levels: Levels | null; unplanned: Order[]; loaded: Record<string, number> },
 ): Alert[] {
   const out: Alert[] = [];
+  const stock = (id: string) => levelOf(opts.levels, id);
 
   // Driver-reported problems come first: someone is waiting on the phone.
   Object.values(opts.confirmations)
@@ -50,12 +51,17 @@ export function computeAlerts(
       });
     });
 
-  // Stock that cannot cover today's loads.
-  const demand = demandByProduct(trucks);
+  // Orders with no vehicle today.
+  if (opts.unplanned.length) {
+    out.push({ id: "unplanned", severity: "high", title: `${opts.unplanned.length} ${opts.unplanned.length === 1 ? "comandă fără mașină" : "comenzi fără mașină"} azi`, detail: "Nu încap sau au venit după aprobarea traseelor. Deschideți Trasee → „Adaugă-le unde încap”." });
+  }
+
+  // Stock that cannot cover what is still to be loaded today.
+  const demand = demandByProduct(trucks.filter((tr) => !opts.loaded[tr.number]));
   PRODUCTS.forEach((p) => {
     const need = demand.get(p.id) ?? 0;
-    if (need > p.stock) {
-      out.push({ id: `stock-short-${p.id}`, severity: "high", title: `Stoc insuficient: ${p.name}`, detail: `Necesar azi ${fmtQty(need)} ${unitLabel(p.unit)}, în stoc ${fmtQty(p.stock)} ${unitLabel(p.unit)}.`, select: { kind: "zone", id: p.zone } });
+    if (need > stock(p.id)) {
+      out.push({ id: `stock-short-${p.id}`, severity: "high", title: `Stoc insuficient: ${p.name}`, detail: `De încărcat azi ${fmtQty(need)} ${unitLabel(p.unit)}, în stoc ${fmtQty(stock(p.id))} ${unitLabel(p.unit)}.`, select: { kind: "zone", id: p.zone } });
     }
   });
 
@@ -67,8 +73,9 @@ export function computeAlerts(
       const first = INSTITUTION_BY_ID.get(late[0].institutionId);
       out.push({ id: `late-${tr.id}`, severity: "high", title: `${tr.label}: ${late.length} ${late.length === 1 ? "livrare" : "livrări"} după 18:00`, detail: `Prima: ${first?.name ?? "—"}, sosire ~${fmtTime(late[0].arriveAt)}. Mutați opriri pe altă mașină sau plecați mai devreme.`, select });
     }
-    if (tr.leftover.count > 0) {
-      out.push({ id: `leftover-${tr.id}`, severity: "medium", title: `${tr.label}: ${tr.leftover.count} ${tr.leftover.count === 1 ? "comandă nu încape" : "comenzi nu încap"}`, detail: `≈ ${fmtQty(tr.leftover.kg)} kg peste capacitatea de ${fmtQty(tr.capacityKg)} kg. Repartizați-le pe altă mașină sau altă zi.`, select });
+    const load = truckLoadKg(tr);
+    if (load > tr.capacityKg) {
+      out.push({ id: `over-${tr.id}`, severity: "medium", title: `${tr.label} supraîncărcată`, detail: `${fmtQty(load)} kg, capacitatea este ${fmtQty(tr.capacityKg)} kg. Mutați o comandă pe altă mașină.`, select });
     }
     // Cold chain: chilled products on a vehicle without refrigeration.
     if (!tr.refrigerated && tr.stops.length) {
@@ -95,8 +102,8 @@ export function computeAlerts(
 
   // Low stock (not blocking today) last.
   PRODUCTS.forEach((p) => {
-    if (p.stock < p.min && !((demand.get(p.id) ?? 0) > p.stock)) {
-      out.push({ id: `stock-low-${p.id}`, severity: "info", title: `Stoc redus: ${p.name}`, detail: `${fmtQty(p.stock)} ${unitLabel(p.unit)}, sub minimul de ${fmtQty(p.min)}. De comandat.`, select: { kind: "zone", id: p.zone } });
+    if (stock(p.id) < p.min && !((demand.get(p.id) ?? 0) > stock(p.id))) {
+      out.push({ id: `stock-low-${p.id}`, severity: "info", title: `Stoc redus: ${p.name}`, detail: `${fmtQty(stock(p.id))} ${unitLabel(p.unit)}, sub minimul de ${fmtQty(p.min)}. De comandat (pagina Stoc).`, select: { kind: "zone", id: p.zone } });
     }
   });
 

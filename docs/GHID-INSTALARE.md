@@ -1,6 +1,6 @@
 # Nobil Prest · Depozit & livrări — Ghid de instalare și pornire
 
-**Versiunea 1.2** · 13 octombrie 2026
+**Versiunea 1.3** · 13 octombrie 2026
 
 Acest ghid este pentru persoana care pune aplicația pe server (administrator, IT) și pentru conducerea
 companiei, care vrea să verifice ce face aplicația și ce mai trebuie pentru a o folosi zilnic.
@@ -8,23 +8,25 @@ Ghidul de utilizare (pentru dispeceri și șoferi) este **în aplicație**, pe p
 
 ---
 
-## 1. Ce primiți în versiunea 1.2
+## 1. Ce primiți în versiunea 1.3
 
 | Pentru cine | Ce face |
 |---|---|
-| **Oficiu / dispecerat** | Depozitul 3D, harta Moldovei cu mașinile, lista livrărilor zilei, programul pe ore, alerte, foi de încărcare și de parcurs pentru tipar, export Excel. |
-| **Depozit** | Foaia de încărcare pe zone (subteran, frigorific, uscate) și ordinea de încărcare. Alerte de stoc insuficient. |
+| **Oficiu / dispecerat** | **Comenzi**: fiecare comandă primită la telefon se înregistrează aici (instituția, ziua livrării, produsele). **Trasee**: traseele se fac automat din comenzi, se verifică și se aprobă. Plus harta Moldovei, livrările zilei, alerte, foi pentru tipar, export Excel. |
+| **Depozit** | Ordinea de încărcare: o mașină la **beci** (legume, fructe), una la **rampă**. Foaia de încărcare pe zone. Butonul **„Încărcată”** scade marfa din stoc. **Stoc**: intrări de marfă, inventariere, ce trebuie comandat. |
 | **Șoferi** | Pagina **Șofer** pe telefon: opririle în ordine, navigare Maps/Waze, apel, „Am ajuns / Livrat / Problemă”, GPS din telefon pentru mașinile fără tracker. |
-| **Conducere** | Pagina **Ghid** → „Primii pași”: ce este gata și ce mai lipsește. „Propuneri și probleme”: ce cer colegii. „Versiunea și ce urmează”. |
+| **Conducere** | Pe pagina Comenzi, **ciclul zilei**: comenzi → trasee → încărcare → livrare → facturi. Pagina **Ghid** → „Primii pași”, „Propuneri și probleme”, „Versiunea și ce urmează”. |
 
-**Important:** comenzile, traseele și stocul sunt deocamdată **exemple**, până la conectarea 1C (versiunea 1.4).
-Reale sunt deja:
-- cele 16 mașini (numere și trackere din programul GPS);
-- instituțiile importate din Excel;
-- locația depozitului;
-- pozițiile GPS;
-- confirmările șoferilor;
-- propunerile colegilor.
+**Ciclul complet, pe scurt:**
+1. Instituția sună (cu o zi sau mai multe înainte) → operatorul face **Comenzi → Comandă nouă**.
+2. Comanda intră automat într-o mașină. După-amiaza dispecerul verifică **Trasee → Mâine** și apasă **Aprobă**.
+3. **Stoc** arată ce lipsește pentru mâine → se comandă la furnizori. Marfa primită → **Intrare marfă**.
+4. Dimineața: **Trasee → Azi**, ordinea de încărcare (beci → rampă). Se tipăresc foile. După fiecare mașină → **Încărcată** (se scade din stoc).
+5. Șoferii confirmă pe telefon **Livrat / Problemă**. Seara se trec nr. facturilor pe comenzi și se mută ce nu s-a livrat.
+
+Cât timp o zi nu are nicio comandă înregistrată, aplicația arată **comenzi exemplu** (eticheta „Comenzi demo”).
+Pentru o încercare completă: **Comenzi → „Generează comenzi de test”** (se șterg dintr-un clic).
+Legătura automată cu 1C 7.7 (ca să nu se introducă de două ori) vine în versiunea 1.4.
 
 ---
 
@@ -65,7 +67,7 @@ Reale sunt deja:
 Dacă firma are deja un site cu cPanel, aplicația se pune într-un folder al domeniului, de ex. **`https://draur.com/delivery/`**.
 Nu trebuie Node.js, Docker sau SSH. Merge cu orice versiune de PHP de la 5.4 în sus, deci pe orice găzduire cPanel.
 
-**Ce primiți:** arhiva `nobilprest-delivery-v1.2.0.zip` (~1 MB).
+**Ce primiți:** arhiva `nobilprest-delivery-v1.3.0.zip` (~1 MB).
 
 **Pași (5 minute):**
 1. cPanel → **File Manager** → intrați în folderul domeniului (de ex. `draur.com`).
@@ -128,7 +130,7 @@ cd nobilprest
 ```
 *Depozitul este privat: GitHub va cere un utilizator și un token de acces. Alternativ, descărcați arhiva ZIP de pe GitHub
 pe calculator și copiați-o pe server (de ex. cu WinSCP), apoi dezarhivați-o în folderul `nobilprest`.*
-*Notă: până la unirea în ramura principală, codul versiunii 1.2 se află în ramura
+*Notă: până la unirea în ramura principală, codul versiunii 1.3 se află în ramura
 `claude/moldova-delivery-map-visual-z1oih7`. Rulați `git checkout claude/moldova-delivery-map-visual-z1oih7` după `cd nobilprest`.*
 
 **Pasul 3.** Porniți instalarea:
@@ -184,15 +186,18 @@ Deschideți **Ghid → Primii pași**. Lista se verifică automat și arată ce 
 
 | # | Ce faceți | Ce trebuie să vedeți |
 |---|---|---|
-| 1 | Deschideți aplicația dimineața | Fereastra „Bun venit”, apoi depozitul 3D cu mașinile la rampe |
-| 2 | Apăsați **⚠** (sus, dreapta) | Lista alertelor zilei, cu explicații |
-| 3 | Program → **Toate foile de încărcare** → tipăriți | O foaie A4 pe mașină, produsele pe zone |
-| 4 | Apăsați pe o mașină → **Foaie de parcurs** | Opririle în ordine, rubrici pentru km, combustibil, factură |
-| 5 | Pe telefonul unui șofer: pagina Șofer → **Livrat** | În Livrări apare „✔ confirmat” și ora |
-| 6 | Pe telefon: **Problemă → Închis** | Alertă roșie „problemă la livrare” |
-| 7 | Livrări → **Excel (CSV)** | Fișierul se deschide în Excel cu diacritice corecte |
-| 8 | Moldova → Date → **Live GPS** | Mașinile care trimit poziții apar unde sunt (după conectarea GPS) |
-| 9 | Ghid → **Propuneri și probleme** → scrieți ceva | Apare în listă, vizibil pentru tot oficiul |
+| 1 | Comenzi → **Comandă nouă**: o grădiniță, mâine, câteva produse → Salvează | Comanda primește nr. CMD-…, apare în listă cu mașina și ora de sosire |
+| 2 | Comenzi → **Generează comenzi de test** (pentru mâine) | ~170 de comenzi; ciclul zilei arată tonele, mașinile, ce lipsește din stoc |
+| 3 | Trasee → **Mâine** | Fiecare mașină cu opririle și orele; nicio livrare după 18:00 |
+| 4 | Deschideți o comandă → **Mașina** → alegeți alta | Comanda trece pe mașina aleasă, orele se recalculează |
+| 5 | Trasee → **Aprobă traseele** | Mesaj verde „Trasee aprobate” |
+| 6 | Trasee → **Toate foile de încărcare** → tipăriți | O foaie A4 pe mașină: beci, frigider, uscate, ora la beci și la rampă |
+| 7 | Trasee (azi) → **Încărcată** la o mașină, apoi pagina **Stoc** | Produsele mașinii au scăzut din stoc; mișcarea apare în istoric |
+| 8 | Stoc → **Intrare marfă** | Stocul crește |
+| 9 | Pe telefonul unui șofer: pagina Șofer → **Livrat** | În Comenzi și Livrări apare „Livrată ✓” |
+| 10 | Pe telefon: **Problemă → Închis** | Alertă roșie „problemă la livrare” |
+| 11 | Depozit (3D) | O mașină la beci, una la rampă, celelalte așteaptă în parcare |
+| 12 | Comenzi → **Șterge comenzile de test** | Ziua revine la comenzi exemplu |
 
 Ce nu vă place sau ce lipsește: scrieți la **Ghid → Propuneri și probleme** (vezi secțiunea 9).
 
@@ -206,7 +211,7 @@ sudo ./scripts/actualizare.sh
 ```
 Scriptul face mai întâi o copie de rezervă, descarcă versiunea nouă și repornește. Datele și parolele rămân.
 La următoarea deschidere, fiecare utilizator vede fereastra **„Ce e nou în versiunea …”**.
-Versiunea curentă apare în aplicație lângă numele Nobil Prest (ex. **v1.2**).
+Versiunea curentă apare în aplicație lângă numele Nobil Prest (ex. **v1.3**).
 
 ---
 
@@ -233,6 +238,10 @@ Ce conține folderul `data/`:
 | `gps-latest.json`, `gps/<zi>.ndjson` | Ultima poziție a fiecărei mașini și traseul fiecărei zile |
 | `events/<zi>.ndjson` | Confirmările șoferilor |
 | `feedback.json` | Propunerile și problemele |
+| `orders/<zi>.json`, `orders-counter.json` | Comenzile pe zile de livrare și ultimul număr de comandă |
+| `plans/<zi>.json` | Traseele salvate/aprobate și mașinile încărcate |
+| `stock.json`, `stock-moves.json` | Stocul actual și istoricul mișcărilor (intrări, încărcări, inventar) |
+| `products.json` | Lista de produse, dacă a fost modificată pe pagina Stoc |
 
 ---
 
@@ -290,5 +299,5 @@ Lista completă și actualizată: în aplicație, **Ghid → Versiunea și ce ur
   - `APP_PASSWORD` (oficiu);
   - `DRIVER_PASSWORD` (utilizator `sofer`);
   - `GPS_INGEST_TOKEN`.
-- Verificare: `GET /api/health` → `{"ok":true,"version":"1.2.0"}`.
+- Verificare: `GET /api/health` → `{"ok":true,"version":"1.3.0"}`.
 - Integrări GPS și 1C: `docs/INTEGRATIONS.md`. Detalii de instalare în engleză: `docs/DEPLOY.md`.

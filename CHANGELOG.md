@@ -4,6 +4,22 @@ Versiunea curentă apare în aplicație lângă numele Nobil Prest și pe pagina
 La o versiune nouă: se modifică `version` în `package.json`, se mută punctele din „Urmează” în lista de mai jos
 (și în `src/lib/version.ts`), apoi se rulează `sudo ./scripts/actualizare.sh` pe server.
 
+## 1.3 — 13 octombrie 2026 · Ciclul complet: comenzi, trasee, încărcare, stoc
+- **Comenzi**: toate comenzile într-un singur loc. „Comandă nouă” pentru fiecare telefon (instituția, ziua livrării — implicit mâine —, produsele), „Ca ultima comandă”, mutare pe altă zi, anulare, nr. factură.
+- **Ciclul zilei** pe un singur ecran: comenzi primite → trasee → încărcare → livrare → facturi.
+- **Traseele se fac din comenzile reale**:
+  - mașinile cu traseu fix își iau localitățile (Date → Flota);
+  - Chișinăul merge cu mașinile mici;
+  - restul țării se împarte pe direcții, astfel încât fiecare mașină să termine până la 18:00.
+- **Trasee**: pe zile (azi, mâine…), „Aprobă traseele”, comenzile fără mașină, mutarea unei comenzi pe altă mașină, foile pentru orice zi.
+- **Încărcarea ca în realitate**: o singură rampă la depozit și beciul alături. O mașină la beci, una la rampă; pleacă primele cele cu drumul lung.
+- **„Încărcată”** scade produsele mașinii din stoc (se poate anula).
+- **Stoc**: stocul real, ce se încarcă azi și mâine, ce rămâne, ce trebuie comandat. Intrare marfă, inventariere, lista de produse, istoricul mișcărilor.
+- **Depozitul 3D**: beciul lângă depozit și o singură rampă.
+- **Comenzi de test** generate și șterse dintr-un clic, ca să încercați tot ciclul.
+- Ceasul din bara de sus nu mai mișcă glisorul.
+- Merge și pe găzduirea web (PHP de la 5.4 în sus), cu pagina de verificare `verificare.php`.
+
 ## 1.2 — 13 octombrie 2026 · Lucru în echipă, șoferi și instalare pe server
 - Datele (instituții, flotă, depozit) se salvează pe server și sunt aceleași pe toate calculatoarele.
 - Fișa flotei: nr. înmatriculare, tracker, model, capacitate, frigorific, șofer, telefon, traseu fix/zilnic, activă.
@@ -44,19 +60,19 @@ La o versiune nouă: se modifică `version` în `package.json`, se mută punctel
 
 ## Urmează
 
-### 1.3 · Date reale la zi
+### 1.4 · Date reale și 1C
 - Lista reală a celor ~800 de instituții, cu adrese verificate.
-- Pozițiile reale de la furnizorul GPS, traseul parcurs al zilei.
-- Fișele complete ale mașinilor. Rapoarte simple (livrări pe zi/lună, pe mașină, întârzieri).
-- *De la companie:* Excel instituții din 1C; contactul și accesul furnizorului GPS; locația depozitului.
+- Comenzile, facturile și stocul vin automat din 1C 7.7 (fără a le introduce de două ori).
+- Pozițiile reale de la furnizorul GPS. Rapoarte simple (livrări pe zi/lună, pe mașină, întârzieri).
+- *De la companie:* Excel instituții din 1C; programatorul 1C și un export de exemplu; accesul furnizorului GPS; locația depozitului.
 
-### 1.4 · Comenzile din 1C automat
-- Comenzi, facturi și stoc din 1C 7.7 la 5–15 minute. Nr. facturii pe foaia de parcurs. Stocul real.
-- *De la companie:* programatorul 1C; un export de exemplu (o zi de comenzi + stoc).
+### 1.5 · Comenzi online de la instituții
+- Fiecare instituție primește linkul ei și trimite comanda direct, până la o oră stabilită. Apare pe pagina Comenzi.
+- *De la companie:* care instituții încep primele; ora-limită pentru comenzi.
 
-### 1.5 · Planificarea traseelor
-- Drumuri reale, împărțire automată pe mașini, trasee fixe pe zile, mutarea opririlor cu mouse-ul.
-- *De la companie:* regulile traseelor fixe.
+### 1.6 · Planificare avansată
+- Drumuri reale, traseele fixe pe zile, mutarea opririlor cu mouse-ul, încărcarea de seara, setări pentru încărcare.
+- *De la companie:* regulile traseelor fixe; de la ce oră și cât durează încărcarea unei mașini.
 
 ### 2.0 · Companie complet digitală
 - Conturi personale cu drepturi, notificări Viber/SMS către instituții, foto factură, analize lunare.

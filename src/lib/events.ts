@@ -22,7 +22,9 @@ export function eventsUntil(trucks: Truck[], t: number, limit = 60): OpsEvent[] 
     const push = (time: number, kind: EventKind, text: string, institutionId?: string) => {
       if (time <= t) out.push({ id: `${tr.id}-${kind}-${time.toFixed(2)}`, t: time, kind, truckId: tr.id, institutionId, text });
     };
-    push(tr.loadStart, "load", `${tr.label} a început încărcarea la rampa R${tr.dock}`);
+    if (!tr.stops.length) continue;
+    if (tr.beci) push(tr.beci.from, "load", `${tr.label} se încarcă la beci (legume, fructe)`);
+    push(tr.ramp.from, "load", `${tr.label} a tras la rampă`);
     push(tr.departAt, "depart", `${tr.label} a plecat spre ${tr.region}`);
     tr.stops.forEach((s) => {
       const inst = INSTITUTION_BY_ID.get(s.institutionId)!;

@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  Boxes,
+  Route as RouteIcon,
   AlertTriangle,
   BookOpen,
   CalendarRange,
@@ -147,6 +149,7 @@ interface Info {
   gps: { trackers: number; trackersLastDay: number; phonesLastDay: number };
   confirmations: { today: number; days: number };
   feedback: { total: number; open: number };
+  orders?: { days: number };
 }
 
 type Step = { ok: boolean | "warn" | "later"; title: string; detail: string; action?: [string, () => void] };
@@ -183,7 +186,8 @@ function Checklist() {
         { ok: info.institutions > 0, title: "Lista instituțiilor", detail: info.institutions > 0 ? `${info.institutions} instituții importate.` : "Încărcați Excel-ul cu instituțiile (export din 1C) pe pagina Date.", action: ["Importă", () => setView("data")] },
         { ok: info.gps.trackersLastDay > 0 ? true : info.gps.phonesLastDay > 0 ? "warn" : false, title: "GPS de la furnizor", detail: info.gps.trackersLastDay > 0 ? `${info.gps.trackersLastDay} ${info.gps.trackersLastDay === 1 ? "tracker a trimis" : "trackere au trimis"} poziții în ultimele 24 h.` : `Furnizorul GPS trebuie să trimită pozițiile la ${BASE}/api/gps (vezi Ce este nevoie).` },
         { ok: info.confirmations.days > 0, title: "Primul șofer a confirmat o livrare", detail: info.confirmations.days > 0 ? `Confirmări în ${info.confirmations.days} ${info.confirmations.days === 1 ? "zi" : "zile"}, azi ${info.confirmations.today}.` : `Dați unui șofer adresa ${page("/sofer")} și ${ACCESS_BY_CODE ? "codul" : "parola"}, rugați-l să apese „Livrat” la o oprire.`, action: ["Pentru șoferi", () => document.getElementById("ghid-soferi")?.scrollIntoView({ behavior: "smooth" })] },
-        { ok: "later", title: "Comenzile din 1C", detail: "În versiunea 1.4: export automat din 1C 7.7. Până atunci comenzile sunt exemple." },
+        { ok: (info.orders?.days ?? 0) > 0, title: "Comenzile se înregistrează în aplicație", detail: (info.orders?.days ?? 0) > 0 ? `Comenzi înregistrate pentru ${info.orders!.days} ${info.orders!.days === 1 ? "zi" : "zile"}.` : "Comenzi → „Comandă nouă” la fiecare telefon. Până atunci traseele se fac din comenzi exemplu.", action: ["Comenzi", () => setView("orders")] },
+        { ok: "later", title: "Comenzile din 1C automat", detail: "În versiunea 1.4: importul automat din 1C 7.7, ca să nu fie introduse de două ori." },
       ]
     : [];
   const done = steps.filter((s) => s.ok === true).length;
@@ -230,15 +234,17 @@ function Checklist() {
 function Pages() {
   const setView = useUi((s) => s.setView);
   const pages: [View, string, React.ReactNode, string, string][] = [
-    ["warehouse", "Depozit", <Warehouse key="w" size={18} />, "1", "Depozitul 3D: rampele R1–R6, oficiul, camera frigorifică, rafturile și depozitul subteran. Mașinile intră, se încarcă și pleacă. 👁 arată interiorul. Click pe orice pentru detalii."],
-    ["map", "Moldova", <MapIcon key="m" size={18} />, "2", "Harta cu mașinile și instituțiile. Linia plină = drum parcurs, punctată = de parcurs. Punct verde = livrat, roșu = problemă. „Live GPS” (pagina Date) arată pozițiile reale."],
-    ["deliveries", "Livrări", <ListChecks key="l" size={18} />, "3", "Toate livrările zilei într-un tabel: căutare, filtre (Pe drum, Livrate, Probleme, După 18:00), confirmările șoferilor, export în Excel."],
-    ["planning", "Program", <CalendarRange key="p" size={18} />, "4", "Ziua pe ore, câte un rând pe mașină: încărcare, drum, descărcări, întoarcere. De aici tipăriți toate foile odată."],
-    ["data", "Date", <Database key="d" size={18} />, "5", "Setări: locația depozitului, fișele mașinilor, importul instituțiilor din Excel, starea GPS, grafica simplificată."],
-    ["guide", "Ghid", <BookOpen key="g" size={18} />, "6", "Această pagină: primii pași, ce este nevoie, versiunea, propuneri și probleme."],
+    ["warehouse", "Depozit", <Warehouse key="w" size={18} />, "1", "Depozitul 3D: rampa de încărcare, beciul de alături (legume, fructe), oficiul, camera frigorifică, rafturile. Mașinile merg la beci, apoi la rampă, apoi pleacă. 👁 arată interiorul."],
+    ["orders", "Comenzi", <ClipboardList key="o" size={18} />, "2", "Toate comenzile într-un singur loc: „Comandă nouă” pentru fiecare telefon, pe zile (azi, mâine…). Ciclul zilei: comenzi → trasee → încărcare → livrare → facturi. Stocul pentru ziua aleasă."],
+    ["planning", "Trasee", <RouteIcon key="p" size={18} />, "3", "Traseele zilei făcute din comenzi: mașinile, ordinea opririlor, încărcarea beci → rampă cu butonul „Încărcată”, programul pe ore. „Aprobă traseele”, foile de încărcare și de parcurs."],
+    ["map", "Moldova", <MapIcon key="m" size={18} />, "4", "Harta cu mașinile și instituțiile. Linia plină = drum parcurs, punctată = de parcurs. Punct verde = livrat, roșu = problemă. „Live GPS” (pagina Date) arată pozițiile reale."],
+    ["deliveries", "Livrări", <ListChecks key="l" size={18} />, "5", "Toate livrările de azi într-un tabel: căutare, filtre (Pe drum, Livrate, Probleme, După 18:00), confirmările șoferilor, export în Excel."],
+    ["stock", "Stoc", <Boxes key="s" size={18} />, "6", "Stocul fiecărui produs: cât este, cât se încarcă azi și mâine, ce rămâne, ce trebuie comandat. „Intrare marfă”, „Inventariere”, lista de produse."],
+    ["data", "Date", <Database key="d" size={18} />, "7", "Setări: locația depozitului, fișele mașinilor (și localitățile traseelor fixe), importul instituțiilor din Excel, starea GPS, grafica simplificată."],
+    ["guide", "Ghid", <BookOpen key="g" size={18} />, "8", "Această pagină: primii pași, o zi de lucru, ce este nevoie, versiunea, propuneri și probleme."],
   ];
   return (
-    <Section id="pagini" icon={<ClipboardList size={19} />} title="Paginile aplicației" sub="Butoanele din bara de sus sau tastele 1–6.">
+    <Section id="pagini" icon={<ClipboardList size={19} />} title="Paginile aplicației" sub="Butoanele din bara de sus sau tastele 1–8.">
       <div className="grid gap-3 sm:grid-cols-2">
         {pages.map(([v, name, icon, key, text]) => (
           <div key={v} className="flex gap-3 rounded-xl border border-slate-100 p-3">
@@ -276,11 +282,12 @@ function Pages() {
 /* ---------- 4. A working day ---------- */
 function WorkDay() {
   const steps = [
-    ["Dimineața, înainte de încărcare", "Deschideți ⚠ Alerte: stoc insuficient, comenzi care nu încap, produse refrigerate în mașini nefrigorifice. Rezolvați-le înainte de plecare."],
-    ["Pregătirea mașinilor", "Program → „Toate foile de încărcare”. Depozitul pregătește produsele pe zone; ultima livrare se încarcă prima."],
-    ["Plecarea", "Dați fiecărui șofer foaia de parcurs. Șoferul deschide pagina Șofer pe telefon."],
-    ["În timpul zilei", "Urmăriți harta și pagina Livrări. Confirmările șoferilor apar în ~15 secunde. Problemele (închis, refuzat) apar în Alerte."],
-    ["Seara", "Livrări → „Excel (CSV)” pentru raport. Verificați ce a rămas nelivrat și mutați pe altă zi."],
+    ["Toată ziua: comenzile pentru zilele următoare", "Comenzi → „Comandă nouă” la fiecare telefon: instituția, ziua livrării (implicit mâine), produsele. „Ca ultima comandă” copiază comanda precedentă. Comenzile intră automat în trasee."],
+    ["După-amiaza: traseele de mâine", "Trasee → Mâine. Verificați mașinile și orele (alertă dacă ceva ar ajunge după 18:00). O comandă se mută din Comenzi → comanda → Mașina. Apoi „Aprobă traseele”: comenzile venite după aceea stau la „Fără mașină”."],
+    ["Stocul", "Stoc: ce lipsește pentru azi și mâine și cât trebuie comandat. Marfa primită se înregistrează la „Intrare marfă”; o dată pe săptămână „Inventariere”."],
+    ["Dimineața: încărcarea", "Trasee → Azi: ordinea de încărcare — o mașină la beci (legume, fructe), una la rampă. Tipăriți foile de încărcare. După fiecare mașină apăsați „Încărcată”: produsele se scad din stoc."],
+    ["Plecarea și ziua", "Fiecare șofer primește foaia de parcurs și deschide pagina Șofer pe telefon. Urmăriți harta și Livrări; confirmările apar în ~15 secunde, problemele în ⚠ Alerte."],
+    ["Seara", "Scrieți nr. facturilor pe comenzi (din 1C). Comenzile cu probleme se mută pe altă zi (comanda → „Mută pe altă zi”). Livrări → „Excel (CSV)” pentru raport."],
   ];
   return (
     <Section id="zi-de-lucru" icon={<CalendarRange size={19} />} title="O zi de lucru" sub="Cum se folosește aplicația de la dimineață până seara.">
@@ -425,7 +432,7 @@ function Versions() {
 const KIND: Record<Feedback["kind"], [string, Tone]> = { problema: ["Problemă", "red"], propunere: ["Propunere", "blue"], intrebare: ["Întrebare", "violet"] };
 const PRIO: Record<Feedback["priority"], [string, Tone]> = { mica: ["mică", "gray"], medie: ["medie", "amber"], mare: ["mare", "red"] };
 const STATUS: Record<Feedback["status"], [string, Tone]> = { nou: ["Nou", "blue"], "in-lucru": ["În lucru", "amber"], planificat: ["Planificat", "violet"], rezolvat: ["Rezolvat", "green"], respins: ["Nu se face", "gray"] };
-const PAGES = ["General", "Depozit", "Moldova", "Livrări", "Program", "Date", "Șofer", "Foi tipărite", "Alerte"];
+const PAGES = ["General", "Comenzi", "Trasee", "Stoc", "Depozit", "Moldova", "Livrări", "Date", "Șofer", "Foi tipărite", "Alerte"];
 const NAME_KEY = "nobilprest.feedbackName";
 
 function FeedbackSection() {
@@ -583,8 +590,11 @@ function FeedbackSection() {
 /* ---------- 9. FAQ ---------- */
 function Faq() {
   const qa: [string, string][] = [
-    ["De ce comenzile nu sunt cele reale?", "Comenzile se introduc în 1C. Legătura automată cu 1C 7.7 vine în versiunea 1.4. Până atunci aplicația folosește comenzi exemplu, ca să puteți vedea cum funcționează totul."],
-    ["Depozitul 3D sau harta nu se afișează.", "Calculatorul nu are accelerare grafică (WebGL). Actualizați Chrome/Edge și driverul plăcii video. Între timp folosiți Livrări, Program și Date. Pe calculatoare mai slabe bifați „Grafică simplificată” pe pagina Date."],
+    ["Ce înseamnă „Comenzi demo”?", "Pentru ziua respectivă nu este înregistrată nicio comandă reală, așa că aplicația arată comenzi exemplu (nu se salvează, nu schimbă stocul). Imediat ce înregistrați prima comandă pe pagina Comenzi, ziua folosește doar comenzile reale."],
+    ["Cum încerc tot ciclul fără comenzi reale?", "Comenzi → „Generează comenzi de test”: se creează comenzi reale marcate „test”, cu care puteți face trasee, încărcare și stoc. Se șterg cu „Șterge comenzile de test”."],
+    ["Cum se fac traseele?", "Automat: mașinile cu traseu fix iau localitățile lor (Date → Flota), Chișinăul merge cu mașinile mici, restul țării se împarte pe direcții astfel încât fiecare mașină să termine până la 18:00. Le puteți modifica și aproba pe pagina Trasee."],
+    ["Când se scade stocul?", "Când depozitul apasă „Încărcată” pentru o mașină (Trasee → Încărcarea). Dacă a fost apăsat din greșeală, „Anulează” pune produsele înapoi."],
+    ["Depozitul 3D sau harta nu se afișează.", "Calculatorul nu are accelerare grafică (WebGL). Actualizați Chrome/Edge și driverul plăcii video. Între timp folosiți Comenzi, Trasee, Livrări, Stoc și Date. Pe calculatoare mai slabe bifați „Grafică simplificată” pe pagina Date."],
     ["O mașină nu apare pe hartă în modul Live GPS.", "Mașina apare doar dacă a trimis o poziție în ultimele 15 minute. Verificați pe pagina Date → GPS în timp real. Mașinile 4, 5 și 12 nu au tracker funcțional: șoferul trebuie să activeze GPS-ul din telefon."],
     ["Șoferul a apăsat „Livrat” dar nu apare.", "Confirmările apar în ~15 secunde. Dacă telefonul era fără internet, se trimit când revine semnalul (pe pagina Șofer apare „netrimise”)."],
     ["Cum schimb datele unei mașini?", "Date → Flota: modificați și apăsați „Salvează flota”. Se aplică pe toate calculatoarele."],

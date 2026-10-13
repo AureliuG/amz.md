@@ -1,9 +1,10 @@
 "use client";
 
-import { Building2, CheckCircle2, CircleAlert, FileText, MapPin, Package, Phone, Printer, Warehouse, X } from "lucide-react";
+import { Building2, CheckCircle2, CircleAlert, FileText, MapPin, Package, PackageCheck, Phone, Printer, Warehouse, X } from "lucide-react";
 import { demandByProduct } from "@/lib/alerts";
 import { INSTITUTION_BY_ID, PRODUCT_BY_ID, PRODUCTS } from "@/lib/seed";
-import { STATUS_LABEL, STATUS_TONE, effectiveStatus, fmtDur, fmtTime, isOnTime, truckState } from "@/lib/sim";
+import { PLACE_LABEL, STATUS_LABEL, STATUS_TONE, effectiveStatus, fmtDur, fmtTime, isOnTime, loadingPlace, truckState } from "@/lib/sim";
+import { levelOf } from "@/lib/stock";
 import { liveFix, useMinute, useTrucks, useUi } from "@/lib/store";
 import type { InstitutionType, Selection, StorageZone, Truck } from "@/lib/types";
 import { printSheets } from "../PrintSheets";
@@ -29,7 +30,7 @@ function ConfirmMark({ orderNo }: { orderNo: string }) {
 }
 
 const TYPE_LABEL: Record<InstitutionType, string> = { kindergarten: "Grădiniță", school: "Școală", hospital: "Spital", prison: "Penitenciar", social: "Asistență socială" };
-const ZONE_LABEL: Record<StorageZone | "office", string> = { cellar: "Depozit subteran", cold: "Cameră frigorifică", dry: "Rafturi produse uscate", office: "Oficiu" };
+const ZONE_LABEL: Record<StorageZone | "office", string> = { cellar: "Beci · legume și fructe", cold: "Cameră frigorifică", dry: "Rafturi produse uscate", office: "Oficiu" };
 
 export function DetailPanel() {
   const sel = useUi((s) => s.selection);
@@ -74,6 +75,8 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
   const trucks = useTrucks();
   const select = useUi((s) => s.select);
   const confirmations = useUi((s) => s.confirmations);
+  const today = useUi((s) => s.today);
+  const markLoaded = useUi((s) => s.markLoaded);
 
   if (sel.kind === "truck") {
     const tr = trucks.find((x) => x.id === sel.id);
@@ -88,7 +91,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
         <div className="mb-2 flex items-center gap-2">
           <Chip tone={STATUS_TONE[st.status]}>{STATUS_LABEL[st.status]}</Chip>
           <span className="truncate text-[11px] text-slate-500">
-            {st.status === "loading" && `Rampa R${tr.dock} · pleacă la ${fmtTime(tr.departAt)}`}
+            {st.status === "loading" && `${PLACE_LABEL[loadingPlace(tr, t) ?? "rampa"]} · pleacă la ${fmtTime(tr.departAt)}`}
             {(st.status === "driving" || st.status === "departing") && nextInst && `Spre ${nextInst.name}`}
             {st.status === "unloading" && nextInst && `La ${nextInst.name}`}
             {st.status === "parked" && `Încărcarea începe la ${fmtTime(tr.loadStart)}`}
@@ -113,9 +116,17 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
             </a>
           }
         />
-        {tr.leftover.count > 0 && (
-          <div className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800 ring-1 ring-amber-200">
-            {tr.leftover.count} {tr.leftover.count === 1 ? "comandă nu a încăput" : "comenzi nu au încăput"} (≈ {tr.leftover.kg} kg).
+        <Row k="Încărcare" v={`${tr.beci ? `beci ${fmtTime(tr.beci.from)}, ` : ""}rampă ${fmtTime(tr.ramp.from)}–${fmtTime(tr.ramp.to)}`} />
+        {load > tr.capacityKg && <div className="mt-2 rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800 ring-1 ring-rose-200">Supraîncărcată cu {load - tr.capacityKg} kg.</div>}
+        {!today.demo && tr.stops.length > 0 && (
+          <div className="mt-2">
+            {today.saved?.loaded[tr.number] ? (
+              <Chip tone="violet">Încărcată la {hhmm(today.saved.loaded[tr.number])} · scăzută din stoc</Chip>
+            ) : (
+              <button onClick={() => void markLoaded(today.date, tr.number)} className="flex w-full items-center justify-center gap-1 rounded-lg bg-violet-600 py-1.5 text-[11.5px] font-medium text-white hover:bg-violet-700">
+                <PackageCheck size={13} /> Marchează încărcată (scade din stoc)
+              </button>
+            )}
           </div>
         )}
         <div className="mt-3 grid grid-cols-2 gap-1.5">
@@ -194,7 +205,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
             <Row k="Sosire planificată" v={fmtTime(stop.arriveAt)} />
             <ConfirmRow orderNo={stop.orderNo} />
             <Row k="Termen" v={<span className={isOnTime(stop) ? "" : "text-rose-600"}>până la {fmtTime(inst.windowEnd)}</span>} />
-            <Row k="Comandat" v={`acum ${stop.orderedDaysAgo} ${stop.orderedDaysAgo > 1 ? "zile" : "zi"} (telefon → 1C)`} />
+            <Row k="Comandat" v={stop.orderedDaysAgo === 0 ? "azi" : `acum ${stop.orderedDaysAgo} ${stop.orderedDaysAgo > 1 ? "zile" : "zi"}`} />
             <Row
               k="Document"
               v={
@@ -206,7 +217,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
             <div className="mt-3 text-[11px] font-semibold text-slate-700">Comanda · {stop.weightKg} kg</div>
             <ul className="mt-1 divide-y divide-slate-100">
               {stop.lines.map((l) => {
-                const p = PRODUCT_BY_ID.get(l.productId)!;
+                const p = PRODUCT_BY_ID.get(l.productId) ?? { name: l.productId, unit: "kg", color: "#cbd5e1" };
                 return (
                   <li key={l.productId} className="flex items-center gap-2 py-1.5 text-[11.5px]">
                     <span className="h-3 w-3 rounded" style={{ background: p.color, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.08)" }} />
@@ -230,20 +241,22 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
   }
 
   if (sel.kind === "dock") {
-    const atDock = trucks.filter((x) => x.dock === sel.id);
-    const now = atDock.find((x) => t >= x.loadStart && t < x.departAt);
+    const place = sel.id;
+    const list = trucks.filter((x) => x.stops.length && (place === "beci" ? x.beci : true)).sort((a, b) => (place === "beci" ? a.beci!.from - b.beci!.from : a.ramp.from - b.ramp.from));
+    const now = list.find((x) => loadingPlace(x, t) === place);
+    const win = (x: Truck) => (place === "beci" ? x.beci! : x.ramp);
     return (
       <>
-        <Header icon={<Warehouse size={20} />} kicker="Intrarea principală" title={`Rampa R${sel.id}`} sub={now ? `Se încarcă ${now.label}` : "Liberă"} />
+        <Header icon={<Warehouse size={20} />} kicker={place === "beci" ? "Beci · lângă depozit" : "Depozit · intrarea principală"} title={place === "beci" ? "Beci (legume, fructe)" : "Rampa de încărcare"} sub={now ? `Se încarcă ${now.label}` : "Liber"} />
         {now && (
           <>
-            <Bar value={truckState(now, t).progress} tone="amber" />
-            <div className="mb-2 mt-1 text-right text-[10.5px] text-slate-500">pleacă la {fmtTime(now.departAt)}</div>
+            <Bar value={(t - win(now).from) / (win(now).to - win(now).from)} tone="amber" />
+            <div className="mb-2 mt-1 text-right text-[10.5px] text-slate-500">gata la {fmtTime(win(now).to)}</div>
           </>
         )}
-        <div className="text-[11px] font-semibold text-slate-700">Azi la această rampă</div>
-        {atDock.map((x) => (
-          <Row key={x.id} k={`${fmtTime(x.loadStart)}–${fmtTime(x.departAt)}`} v={<button className="text-blue-600" onClick={() => select({ kind: "truck", id: x.id })}>{x.label}</button>} />
+        <div className="text-[11px] font-semibold text-slate-700">Azi {place === "beci" ? "la beci" : "la rampă"}</div>
+        {list.map((x) => (
+          <Row key={x.id} k={`${fmtTime(win(x).from)}–${fmtTime(win(x).to)}`} v={<button className="text-blue-600" onClick={() => select({ kind: "truck", id: x.id })}>{x.label}</button>} />
         ))}
       </>
     );
@@ -254,7 +267,10 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
       return (
         <>
           <Header icon={<Building2 size={20} />} kicker="Depozit" title="Oficiu" sub="Dispecerat și introducerea comenzilor (1C)" />
-          <p className="text-[12px] text-slate-500">Comenzile primite la telefon se introduc aici în 1C. După conectarea la 1C, vor apărea automat în aplicație.</p>
+          <p className="text-[12px] text-slate-500">Comenzile primite la telefon se înregistrează pe pagina Comenzi. După conectarea la 1C vor veni și automat.</p>
+          <button onClick={() => useUi.getState().setView("orders")} className="mt-3 w-full rounded-lg bg-blue-600 py-2 text-[12px] font-medium text-white hover:bg-blue-700">
+            Deschide Comenzi
+          </button>
         </>
       );
     }
@@ -270,7 +286,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
 
   return (
     <>
-      <Header icon={<Warehouse size={20} />} kicker="Nobil Prest" title="Depozitul central" sub="Intrarea principală · 6 rampe" />
+      <Header icon={<Warehouse size={20} />} kicker="Nobil Prest" title="Depozitul central" sub="Intrarea principală · o rampă · beci alături" />
       <Row k="Mașini" v={trucks.length} />
       <Row k="Produse" v={PRODUCTS.length} />
       <button onClick={() => useUi.getState().setView("warehouse")} className="mt-3 w-full rounded-lg bg-blue-600 py-2 text-[12px] font-medium text-white hover:bg-blue-700">
@@ -281,29 +297,31 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
 }
 
 export function StockList({ items, demand }: { items: typeof PRODUCTS; demand?: Map<string, number> }) {
+  const levels = useUi((s) => s.levels);
   return (
     <ul className="divide-y divide-slate-100">
       {items.map((p) => {
-        const low = p.stock < p.min;
+        const stock = levelOf(levels, p.id);
+        const low = stock < p.min;
         const need = demand?.get(p.id) ?? 0;
-        const short = need > p.stock;
+        const short = need > stock;
         return (
           <li key={p.id} className="py-1.5">
             <div className="flex items-center gap-2 text-[11.5px]">
               <span className="h-3 w-3 rounded" style={{ background: p.color, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.08)" }} />
               <span className="flex-1 text-slate-700">{p.name}</span>
               <span className="tabular-nums text-slate-800">
-                {p.stock.toLocaleString("ro-MD")} {p.unit === "pcs" ? "buc" : p.unit}
+                {Math.round(stock).toLocaleString("ro-MD")} {p.unit === "pcs" ? "buc" : p.unit}
               </span>
               <Chip tone={short ? "red" : low ? "amber" : "green"}>{short ? "Lipsă" : low ? "Redus" : "OK"}</Chip>
             </div>
             {need > 0 && (
               <div className={`ml-5 text-[10px] ${short ? "font-medium text-rose-600" : "text-slate-400"}`}>
                 necesar azi {need.toLocaleString("ro-MD")} {p.unit === "pcs" ? "buc" : p.unit}
-                {short && ` · lipsesc ${(need - p.stock).toLocaleString("ro-MD")}`}
+                {short && ` · lipsesc ${Math.round(need - stock).toLocaleString("ro-MD")}`}
               </div>
             )}
-            <Bar value={p.stock / (p.min * 3)} tone={low ? "amber" : "blue"} className="ml-5 mt-1" />
+            <Bar value={stock / (p.min * 3)} tone={low ? "amber" : "blue"} className="ml-5 mt-1" />
           </li>
         );
       })}

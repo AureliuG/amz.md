@@ -3,26 +3,31 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { INSTITUTION_BY_ID, PRODUCT_BY_ID, PRODUCTS } from "@/lib/seed";
+import { parseDay } from "@/lib/dates";
 import { fmtTime } from "@/lib/sim";
-import { useTrucks } from "@/lib/store";
+import { useUi } from "@/lib/store";
 import type { StorageZone, Truck } from "@/lib/types";
 
 type Kind = "loading" | "route";
-const usePrint = create<{ job: { truckIds: string[]; kind: Kind } | null; set: (job: { truckIds: string[]; kind: Kind } | null) => void }>((set) => ({
+type Job = { truckIds: string[]; kind: Kind; date: string };
+const usePrint = create<{ job: Job | null; set: (job: Job | null) => void }>((set) => ({
   job: null,
   set: (job) => set({ job }),
 }));
 
-/** Open the browser's print dialog with one sheet per truck. */
-export const printSheets = (truckIds: string[], kind: Kind) => usePrint.getState().set({ truckIds, kind });
+/** Open the browser's print dialog with one sheet per truck (for today, or another day's routes). */
+export const printSheets = (truckIds: string[], kind: Kind, date = useUi.getState().day) => usePrint.getState().set({ truckIds, kind, date });
 
 const ZONES: [StorageZone, string][] = [
-  ["cellar", "Depozit subteran — legume și fructe"],
-  ["cold", "Cameră frigorifică"],
-  ["dry", "Rafturi — produse uscate"],
+  ["cellar", "Beci — legume și fructe (se încarcă primele, la beci)"],
+  ["cold", "Cameră frigorifică (rampă)"],
+  ["dry", "Rafturi — produse uscate (rampă)"],
 ];
 const unit = (u: string) => (u === "pcs" ? "buc" : u);
-const longDate = () => new Date().toLocaleDateString("ro-MD", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const longDate = (iso: string) => parseDay(iso).toLocaleDateString("ro-MD", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+let printDate = "";
+/** Invoice number of an order, when the office has written it on the order. */
+let invoiceOf: (orderId: string) => string = () => "";
 
 function Header({ title, tr }: { title: string; tr: Truck }) {
   const kg = tr.stops.reduce((a, s) => a + s.weightKg, 0);
@@ -30,7 +35,7 @@ function Header({ title, tr }: { title: string; tr: Truck }) {
     <div className="ps-head">
       <div className="ps-brand">
         <b>NOBIL PREST</b>
-        <span>{longDate()}</span>
+        <span>{longDate(printDate)}</span>
       </div>
       <h1>{title}</h1>
       <table className="ps-meta">
@@ -44,7 +49,7 @@ function Header({ title, tr }: { title: string; tr: Truck }) {
           </tr>
           <tr>
             <td>
-              Rampa R{tr.dock} · încărcare {fmtTime(tr.loadStart)}–{fmtTime(tr.departAt)}
+              Încărcare nr. {tr.loadOrder}: {tr.beci ? `beci ${fmtTime(tr.beci.from)}–${fmtTime(tr.beci.to)}, ` : ""}rampă {fmtTime(tr.ramp.from)}–{fmtTime(tr.ramp.to)}
             </td>
             <td>
               Plecare {fmtTime(tr.departAt)} · întoarcere ~{fmtTime(tr.returnAt)}
@@ -121,7 +126,7 @@ function LoadingSheet({ tr }: { tr: Truck }) {
                 </td>
                 <td>{s.orderNo}</td>
                 <td className="r">{s.weightKg}</td>
-                <td className="small">{s.lines.map((l) => `${PRODUCT_BY_ID.get(l.productId)!.name} ${l.qty}`).join(" · ")}</td>
+                <td className="small">{s.lines.map((l) => `${PRODUCT_BY_ID.get(l.productId)?.name ?? l.productId} ${l.qty}`).join(" · ")}</td>
               </tr>
             );
           })}
@@ -167,7 +172,7 @@ function RouteSheet({ tr }: { tr: Truck }) {
                 <td className="small">{[inst.address, inst.town].filter(Boolean).join(", ")}</td>
                 <td className="small">{inst.phone ?? ""}</td>
                 <td className="small">{s.orderNo}</td>
-                <td />
+                <td className="small">{invoiceOf(s.orderId)}</td>
                 <td className="r">{s.weightKg}</td>
                 <td />
                 <td />
@@ -193,7 +198,6 @@ function RouteSheet({ tr }: { tr: Truck }) {
 /** Hidden until printing; rendered outside the app layout so the sheet prints cleanly on A4. */
 export function PrintRoot() {
   const job = usePrint((s) => s.job);
-  const trucks = useTrucks();
   useEffect(() => {
     if (!job) return;
     const done = () => usePrint.getState().set(null);
@@ -205,7 +209,11 @@ export function PrintRoot() {
     };
   }, [job]);
   if (!job) return null;
-  const list = trucks.filter((t) => job.truckIds.includes(t.id) && t.stops.length);
+  const day = useUi.getState().dayFor(job.date);
+  printDate = job.date;
+  const byId = new Map(day.orders.map((o) => [o.id, o]));
+  invoiceOf = (id) => byId.get(id)?.invoiceNo ?? "";
+  const list = day.trucks.filter((t) => job.truckIds.includes(t.id) && t.stops.length);
   return (
     <div id="print-root">
       {list.map((tr) => (job.kind === "loading" ? <LoadingSheet key={tr.id} tr={tr} /> : <RouteSheet key={tr.id} tr={tr} />))}

@@ -3,13 +3,15 @@
 import { Eye, EyeOff, Minus, Plus, RotateCcw } from "lucide-react";
 import dynamic from "next/dynamic";
 import { Component, useEffect, useState, type ReactNode } from "react";
-import { DAY_END, initialLowGfx, useUi } from "@/lib/store";
+import { DAY_END, initialLowGfx, nextWorkday, useUi, VIEWS } from "@/lib/store";
 import { FleetPanel, TrackingPanel } from "./hud/BottomPanels";
 import { DeliveriesView } from "./DeliveriesView";
 import { DataView } from "./DataView";
 import { GuideView } from "./GuideView";
 import { WelcomeModal } from "./WelcomeModal";
 import { PlanningView } from "./PlanningView";
+import { OrdersView } from "./OrdersView";
+import { StockView } from "./StockView";
 import { PrintRoot } from "./PrintSheets";
 import { DetailPanel } from "./hud/DetailPanel";
 import { Kpis } from "./hud/Kpis";
@@ -98,7 +100,7 @@ function NoGraphics({ what }: { what: string }) {
             Deschide Livrări
           </button>
           <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-slate-700" onClick={() => setView("planning")}>
-            Program
+            Trasee
           </button>
         </div>
       </div>
@@ -141,6 +143,35 @@ function useConfirmations() {
   }, []);
 }
 
+/** Keep orders, plans and stock in step with the other computers (every 20 s). */
+function useSync() {
+  useEffect(() => {
+    const tick = () => {
+      const s = useUi.getState();
+      if (s.storage !== "server" || document.hidden) return;
+      void s.fetchDay(s.day);
+      void s.fetchDay(nextWorkday(s.day));
+      if (s.workDate !== s.day) void s.fetchDay(s.workDate);
+      if (s.view === "stock" || s.view === "orders") void s.fetchStock();
+    };
+    const id = setInterval(tick, 20_000);
+    return () => clearInterval(id);
+  }, []);
+}
+
+/** Short confirmation or error message at the bottom of the screen. */
+function Toast() {
+  const toast = useUi((s) => s.toast);
+  if (!toast) return null;
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[60] flex justify-center px-4">
+      <div key={toast.id} className={`panel-in pointer-events-auto max-w-[560px] rounded-xl px-4 py-2.5 text-[12.5px] font-medium shadow-xl ${toast.tone === "error" ? "bg-rose-600 text-white" : "bg-slate-900 text-white"}`} role="status">
+        {toast.text}
+      </div>
+    </div>
+  );
+}
+
 /** Poll the GPS intake while live mode is on or the Date page is open. */
 function useLiveGps() {
   const gpsMode = useUi((s) => s.gpsMode);
@@ -169,6 +200,7 @@ export function Dashboard() {
   useClock();
   useLiveGps();
   useConfirmations();
+  useSync();
   const view = useUi((s) => s.view);
   const [webgl, setWebgl] = useState(true);
   useEffect(() => {
@@ -176,15 +208,15 @@ export function Dashboard() {
     setWebgl(hasWebGL());
     void useUi.getState().loadSaved();
   }, []);
-  // Keyboard: Esc closes details, 1–6 switch pages, space plays/pauses the clock.
+  // Keyboard: Esc closes details, 1–8 switch pages, space plays/pauses the clock.
   useEffect(() => {
-    const views = ["warehouse", "map", "deliveries", "planning", "data", "guide"] as const;
+    const views = VIEWS;
     const onKey = (e: KeyboardEvent) => {
       const ui = useUi.getState();
       if (e.key === "Escape") return ui.select(null);
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key >= "1" && e.key <= "6") ui.setView(views[Number(e.key) - 1]);
+      if (e.key >= "1" && e.key <= "8") ui.setView(views[Number(e.key) - 1]);
       if (e.key === " ") {
         e.preventDefault();
         ui.setPlaying(!ui.playing);
@@ -225,6 +257,8 @@ export function Dashboard() {
         )}
         {view === "data" && <DataView />}
         {view === "guide" && <GuideView />}
+        {view === "orders" && <OrdersView />}
+        {view === "stock" && <StockView />}
         {(view === "deliveries" || view === "planning") && (
           <>
             {view === "deliveries" ? <DeliveriesView /> : <PlanningView />}
@@ -234,7 +268,7 @@ export function Dashboard() {
           </>
         )}
         {/* HUD: the overlay never blocks the scene except where panels are */}
-        <div className={`pointer-events-none absolute inset-0 z-10 flex ${view === "deliveries" || view === "planning" || view === "data" || view === "guide" ? "hidden" : ""}`} data-hud>
+        <div className={`pointer-events-none absolute inset-0 z-10 flex ${view === "warehouse" || view === "map" ? "" : "hidden"}`} data-hud>
           <div className="flex h-full w-full flex-col justify-between gap-3 p-3 sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <Kpis />
@@ -258,6 +292,7 @@ export function Dashboard() {
     </div>
     <PrintRoot />
     <WelcomeModal />
+    <Toast />
     </>
   );
 }

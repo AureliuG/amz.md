@@ -67,9 +67,10 @@ export async function dataDirStatus(): Promise<{ dir: string; writable: boolean 
   }
 }
 
-export async function listDays(kind: string): Promise<string[]> {
+/** Days that have a file in data/<kind>/ (daily logs are .ndjson, daily documents .json). */
+export async function listDays(kind: string, ext = ".ndjson"): Promise<string[]> {
   try {
-    return (await fs.readdir(path.join(DIR, kind))).filter((f) => f.endsWith(".ndjson")).map((f) => f.slice(0, -7)).sort();
+    return (await fs.readdir(path.join(DIR, kind))).filter((f) => f.endsWith(ext)).map((f) => f.slice(0, -ext.length)).sort();
   } catch {
     return [];
   }

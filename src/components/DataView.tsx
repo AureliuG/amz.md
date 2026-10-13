@@ -79,9 +79,9 @@ function FleetSection() {
   const edit = (i: number, patch: Partial<TruckInfo>) => setDraft((d) => d.map((x, k) => (k === i ? { ...x, ...patch } : x)));
 
   return (
-    <Section icon={<TruckIcon size={18} />} title="Flota" sub="Numărul mașinii este același ca în programul GPS. Mașinile inactive (în service, fără șofer) nu primesc trasee.">
+    <Section icon={<TruckIcon size={18} />} title="Flota" sub="Numărul mașinii este același ca în programul GPS. Mașinile inactive (în service, fără șofer) nu primesc trasee. La traseele fixe scrieți localitățile: comenzile de acolo merg automat la acea mașină.">
       <div className="overflow-x-auto rounded-xl border border-slate-100">
-        <table className="w-full min-w-[1120px] text-left text-[12px]">
+        <table className="w-full min-w-[1300px] text-left text-[12px]">
           <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500">
             <tr>
               <th className="px-2 py-2">Nr.</th>
@@ -93,6 +93,7 @@ function FleetSection() {
               <th className="px-2 py-2">Șofer</th>
               <th className="px-2 py-2">Telefon</th>
               <th className="px-2 py-2">Traseu</th>
+              <th className="px-2 py-2" title="Pentru traseele fixe: localitățile mașinii, separate prin virgulă">Localități (traseu fix)</th>
               <th className="px-2 py-2">Activă</th>
             </tr>
           </thead>
@@ -129,6 +130,16 @@ function FleetSection() {
                     <option value="fix">fix</option>
                     <option value="zilnic">zilnic</option>
                   </select>
+                </td>
+                <td className="px-1 py-1">
+                  <input
+                    className={`${cell} min-w-[170px]`}
+                    disabled={f.routeType !== "fix"}
+                    value={f.towns ?? ""}
+                    onChange={(e) => edit(i, { towns: e.target.value })}
+                    placeholder={f.routeType === "fix" ? "ex. Orhei, Rezina" : "—"}
+                    title="Traseu fix: localitățile pe care această mașină le deservește mereu. Comenzile de acolo îi revin automat."
+                  />
                 </td>
                 <td className="px-2 py-1 text-center">
                   <input type="checkbox" checked={f.active} onChange={(e) => edit(i, { active: e.target.checked })} />

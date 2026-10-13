@@ -4,17 +4,23 @@ import { Html, MapControls, OrthographicCamera } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Color, Vector3, type DirectionalLight, type Group } from "three";
-import { BACK_DOCK_COUNT, DOCK_COUNT, PRODUCTS } from "@/lib/seed";
-import { STATUS_LABEL, truckState } from "@/lib/sim";
+import { PRODUCTS } from "@/lib/seed";
+import { loadingPlace, PLACE_LABEL, STATUS_LABEL, truckState } from "@/lib/sim";
 import { useUi } from "@/lib/store";
 import type { Truck } from "@/lib/types";
 import { Box, BrandSign, ForkliftModel, Pallet, Tree, TruckModel } from "./models";
 
 /* ---------------- layout (metres, +z faces the camera / front gate) ---------------- */
 const B = { x0: -32, x1: 32, z0: -26, z1: 4, h: 9 };
-const dockX = (d: number) => -24 + (d - 1) * 8;
-const DOCK_TRUCK_Z = B.z1 + 5.6;
-const PIT = { x0: -56, x1: -38, z0: -26, z1: -4, depth: 5 };
+/** The single loading ramp of the depot (front wall) and the beci next to the depot, on the left. */
+const RAMP_X = -14;
+const RAMP_TRUCK_Z = B.z1 + 5.8;
+const BECI = { x0: -60, x1: -40, z0: -22, z1: -2, depth: 4.5 };
+const BECI_DOOR_X = (BECI.x0 + BECI.x1) / 2;
+const BECI_TRUCK_Z = BECI.z1 + 5.6;
+/** Where a truck waits when it is done at the beci and the ramp is still busy. */
+const WAIT: [number, number] = [-30, 23];
+const BACK_DOCK_COUNT = 2;
 /** Parking: two rows of six to the right of the building; trucks 13+ continue further right. */
 const slotCol = (i: number) => (i % 6) + 6 * Math.floor(i / 12);
 const slot = (i: number): [number, number] => [42 + slotCol(i) * 6.5, Math.floor(i / 6) % 2 === 0 ? -14 : 6];
@@ -50,27 +56,50 @@ function along(path: P[], u: number, reverseLast = false): { p: P; heading: numb
   }
   return { p: path[0], heading: 0 };
 }
-/** Minutes at the start of loading spent driving from the parking slot and backing into the dock. */
+/** Minutes spent driving from one place to the next and backing in (parking → beci, waiting spot → ramp). */
 const MANEUVER_MIN = 3;
-const toDockPath = (t: Truck, i: number): P[] => {
+/** Minutes from the beci to the waiting spot (the planner allows 4 minutes between beci and ramp). */
+const BECI_OUT_MIN = 3;
+const slotToBeci = (i: number): P[] => {
   const [sx, sz] = slot(i);
-  return [[sx, sz], [sx, 26], [dockX(t.dock), 24], [dockX(t.dock), DOCK_TRUCK_Z]];
+  return [[sx, sz], [sx, 26], [BECI_DOOR_X, 22], [BECI_DOOR_X, BECI_TRUCK_Z]];
 };
-const departPath = (t: Truck): P[] => [[dockX(t.dock), DOCK_TRUCK_Z], [dockX(t.dock), 28], [GATE_X, 34], [GATE_X, FENCE_Z], [GATE_X + 8, ROAD_Z + 2], [140, ROAD_Z + 2]];
+const beciToWait: P[] = [[BECI_DOOR_X, BECI_TRUCK_Z], [BECI_DOOR_X, 17], WAIT];
+const waitToRamp: P[] = [WAIT, [RAMP_X, 23], [RAMP_X, RAMP_TRUCK_Z]];
+const slotToRamp = (i: number): P[] => {
+  const [sx, sz] = slot(i);
+  return [[sx, sz], [sx, 26], [RAMP_X, 24], [RAMP_X, RAMP_TRUCK_Z]];
+};
+const departPath: P[] = [[RAMP_X, RAMP_TRUCK_Z], [RAMP_X, 28], [GATE_X, 34], [GATE_X, FENCE_Z], [GATE_X + 8, ROAD_Z + 2], [140, ROAD_Z + 2]];
 const arrivePath = (i: number): P[] => {
   const [sx, sz] = slot(i);
   return [[140, ROAD_Z - 2], [GATE_X + 10, ROAD_Z - 2], [GATE_X + 2, FENCE_Z], [GATE_X + 2, 32], [sx, 30], [sx, sz]];
 };
+
+/** Yard position of a truck that is loading: driving to the beci, at the beci, waiting, driving to the ramp, at the ramp. */
+function loadingPose(tr: Truck, i: number, t: number): { p: P; heading: number } {
+  if (tr.beci && t < tr.beci.to) {
+    const m = (t - tr.beci.from) / MANEUVER_MIN;
+    return m < 1 ? along(slotToBeci(i), m, true) : { p: [BECI_DOOR_X, BECI_TRUCK_Z], heading: 0 };
+  }
+  if (t < tr.ramp.from) {
+    const m = tr.beci ? (t - tr.beci.to) / BECI_OUT_MIN : 1;
+    return m < 1 ? along(beciToWait, m) : { p: WAIT, heading: Math.PI / 2 };
+  }
+  const m = (t - tr.ramp.from) / MANEUVER_MIN;
+  if (m < 1) return along(tr.beci ? waitToRamp : slotToRamp(i), m, true);
+  return { p: [RAMP_X, RAMP_TRUCK_Z], heading: 0 };
+}
 
 /* ---------------- scene pieces ---------------- */
 
 function Ground() {
   const g = 170;
   const pieces: [number, number, number, number][] = [
-    [-g, PIT.x0, -g, g],
-    [PIT.x1, g, -g, g],
-    [PIT.x0, PIT.x1, -g, PIT.z0],
-    [PIT.x0, PIT.x1, PIT.z1, g],
+    [-g, BECI.x0, -g, g],
+    [BECI.x1, g, -g, g],
+    [BECI.x0, BECI.x1, -g, BECI.z0],
+    [BECI.x0, BECI.x1, BECI.z1, g],
   ];
   return (
     <group>
@@ -81,8 +110,8 @@ function Ground() {
         </mesh>
       ))}
       {/* yard asphalt */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[10, 0.02, 19]} receiveShadow>
-        <planeGeometry args={[100, 50]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-1, 0.02, 19]} receiveShadow>
+        <planeGeometry args={[124, 50]} />
         <meshStandardMaterial color={C.yard} />
       </mesh>
       {/* roads */}
@@ -158,32 +187,30 @@ function Building() {
       {!roofOff &&
         Array.from({ length: 6 }, (_, i) => <Box key={i} size={[3, 0.5, 2]} pos={[x0 + 8 + i * 9, h + 1, cz - 4]} color="#dfe6f5" />)}
       <BrandSign pos={[-4, 7.3, z1 + 0.23]} width={22} />
-      {/* front docks */}
-      {Array.from({ length: DOCK_COUNT }, (_, i) => (
-        <group
-          key={i}
-          onClick={(e) => {
-            e.stopPropagation();
-            select({ kind: "dock", id: i + 1 });
-          }}
-        >
-          <Box size={[4.6, 4.6, 0.3]} pos={[dockX(i + 1), 2.5, z1 + 0.25]} color={C.door} />
-          {Array.from({ length: 5 }, (_, k) => (
-            <Box key={k} size={[4.6, 0.06, 0.32]} pos={[dockX(i + 1), 0.8 + k * 0.9, z1 + 0.27]} color="#aeb9d4" cast={false} />
-          ))}
-          <Box size={[1.6, 0.9, 0.2]} pos={[dockX(i + 1), 5.6, z1 + 0.3]} color="#2f6bff" cast={false} />
-          <Html position={[dockX(i + 1), 5.6, z1 + 0.5]} center distanceFactor={undefined} zIndexRange={[5, 0]} style={{ pointerEvents: "none" }}>
-            <span className="text-[10px] font-semibold text-white">R{i + 1}</span>
-          </Html>
-          {/* parking lines */}
-          {[-2.4, 2.4].map((o) => (
-            <mesh key={o} rotation={[-Math.PI / 2, 0, 0]} position={[dockX(i + 1) + o, 0.06, z1 + 6]}>
-              <planeGeometry args={[0.25, 11]} />
-              <meshStandardMaterial color={C.line} />
-            </mesh>
-          ))}
-        </group>
-      ))}
+      {/* the single loading ramp */}
+      <group
+        onClick={(e) => {
+          e.stopPropagation();
+          select({ kind: "dock", id: "rampa" });
+        }}
+      >
+        <Box size={[5.2, 4.8, 0.3]} pos={[RAMP_X, 2.6, z1 + 0.25]} color={C.door} />
+        {Array.from({ length: 5 }, (_, k) => (
+          <Box key={k} size={[5.2, 0.06, 0.32]} pos={[RAMP_X, 0.8 + k * 0.9, z1 + 0.27]} color="#aeb9d4" cast={false} />
+        ))}
+        {/* raised loading platform with bumpers */}
+        <Box size={[6.4, 1.1, 1]} pos={[RAMP_X, 0.55, z1 + 0.6]} color="#c9d2e6" />
+        {[-2.2, 2.2].map((o) => (
+          <Box key={o} size={[0.4, 0.6, 0.25]} pos={[RAMP_X + o, 0.8, z1 + 1.2]} color="#1f2937" cast={false} />
+        ))}
+        {[-2.6, 2.6].map((o) => (
+          <mesh key={`l${o}`} rotation={[-Math.PI / 2, 0, 0]} position={[RAMP_X + o, 0.06, z1 + 7]}>
+            <planeGeometry args={[0.25, 11]} />
+            <meshStandardMaterial color={C.line} />
+          </mesh>
+        ))}
+        <Label pos={[RAMP_X, 6.2, z1 + 0.6]} text="Rampa" tone="blue" />
+      </group>
       {/* back docks (rarely used) */}
       {Array.from({ length: BACK_DOCK_COUNT }, (_, i) => (
         <Box key={i} size={[4.6, 4.6, 0.3]} pos={[-10 + i * 20, 2.5, z0 - 0.25]} color="#d9dee9" />
@@ -252,41 +279,69 @@ function Interior() {
   );
 }
 
-function Cellar() {
+/** The beci: a half-buried cellar next to the depot for vegetables and fruit, with its own loading door. */
+function Beci() {
   const select = useUi((s) => s.select);
-  const { x0, x1, z0, z1, depth } = PIT;
+  const roofOff = useUi((s) => s.roofOff);
+  const { x0, x1, z0, z1, depth } = BECI;
+  const w = x1 - x0;
+  const d = z1 - z0;
   const cx = (x0 + x1) / 2;
   const cz = (z0 + z1) / 2;
   const items = PRODUCTS.filter((p) => p.zone === "cellar");
   return (
-    <group
-      onClick={(e) => {
-        e.stopPropagation();
-        select({ kind: "zone", id: "cellar" });
-      }}
-    >
-      <Box size={[x1 - x0, 0.2, z1 - z0]} pos={[cx, -depth, cz]} color="#cfd6e6" cast={false} />
-      <Box size={[x1 - x0, depth, 0.4]} pos={[cx, -depth / 2, z0]} color="#b9c3d8" />
-      <Box size={[x1 - x0, depth, 0.4]} pos={[cx, -depth / 2, z1]} color="#dfe5f1" />
-      <Box size={[0.4, depth, z1 - z0]} pos={[x0, -depth / 2, cz]} color="#c9d1e3" />
-      <Box size={[0.4, depth, z1 - z0]} pos={[x1, -depth / 2, cz]} color="#dfe5f1" />
-      {/* crates of vegetables and fruit */}
-      {items.map((p, r) =>
-        Array.from({ length: 4 }, (_, k) => (
-          <group key={`${p.id}${k}`} position={[x0 + 3 + k * 4, -depth + 0.1, z0 + 2.2 + r * 2.9]}>
-            <Box size={[2.6, 1.2, 2]} pos={[0, 0.6, 0]} color="#c49a62" />
-            <Box size={[2.3, 0.35, 1.7]} pos={[0, 1.3, 0]} color={p.color} cast={false} />
-          </group>
-        )),
-      )}
-      {/* railing */}
-      {[
-        [cx, z0, x1 - x0, 0.15],
-        [cx, z1, x1 - x0, 0.15],
-      ].map(([x, z, w, dd], i) => (
-        <Box key={i} size={[w, 1.1, dd]} pos={[x, 0.55, z]} color="#9fb4e6" opacity={0.6} />
-      ))}
-      <Label pos={[cx, 3, cz]} text="Depozit subteran · legume și fructe" tone="green" />
+    <group>
+      {/* underground room (visible with the roof off) */}
+      <group
+        onClick={(e) => {
+          e.stopPropagation();
+          select({ kind: "zone", id: "cellar" });
+        }}
+      >
+        <Box size={[w, 0.2, d]} pos={[cx, -depth, cz]} color="#cfd6e6" cast={false} />
+        <Box size={[w, depth, 0.4]} pos={[cx, -depth / 2, z0]} color="#b9c3d8" />
+        <Box size={[w, depth, 0.4]} pos={[cx, -depth / 2, z1]} color="#dfe5f1" />
+        <Box size={[0.4, depth, d]} pos={[x0, -depth / 2, cz]} color="#c9d1e3" />
+        <Box size={[0.4, depth, d]} pos={[x1, -depth / 2, cz]} color="#dfe5f1" />
+        {items.map((p, r) =>
+          Array.from({ length: 4 }, (_, k) => (
+            <group key={`${p.id}${k}`} position={[x0 + 3 + k * 4.5, -depth + 0.1, z0 + 2.2 + (r % 6) * 2.8]}>
+              <Box size={[2.6, 1.2, 2]} pos={[0, 0.6, 0]} color="#c49a62" />
+              <Box size={[2.3, 0.35, 1.7]} pos={[0, 1.3, 0]} color={p.color} cast={false} />
+            </group>
+          )),
+        )}
+      </group>
+      {/* above ground: earth-covered vault and a stone front with the loading door */}
+      <group
+        onClick={(e) => {
+          e.stopPropagation();
+          select({ kind: "dock", id: "beci" });
+        }}
+      >
+        {!roofOff && (
+          <>
+            <Box size={[w + 1, 1.6, d + 1]} pos={[cx, 0.8, cz]} color="#9fb98a" />
+            <Box size={[w - 4, 1.2, d - 5]} pos={[cx, 2.2, cz - 1]} color="#acc597" />
+            <Box size={[w - 10, 0.8, d - 10]} pos={[cx, 3.2, cz - 1.5]} color="#b7cfa2" />
+            {/* air vents */}
+            {[-5, 5].map((o) => (
+              <Box key={o} size={[0.8, 1.6, 0.8]} pos={[cx + o, 4, cz - 2]} color="#e2e8f0" />
+            ))}
+          </>
+        )}
+        <Box size={[12, 4.2, 0.8]} pos={[BECI_DOOR_X, 2.1, z1 + 0.4]} color="#e7dcc8" />
+        <Box size={[12.6, 0.5, 1.2]} pos={[BECI_DOOR_X, 4.4, z1 + 0.4]} color="#c8b79a" cast={false} />
+        <Box size={[4.6, 3.6, 0.2]} pos={[BECI_DOOR_X, 1.8, z1 + 0.85]} color="#6b5440" cast={false} />
+        <Box size={[4.8, 0.06, 2.4]} pos={[BECI_DOOR_X, 0.05, z1 + 2]} color="#c7cfdf" cast={false} />
+        {[-2.6, 2.6].map((o) => (
+          <mesh key={o} rotation={[-Math.PI / 2, 0, 0]} position={[BECI_DOOR_X + o, 0.06, z1 + 7]}>
+            <planeGeometry args={[0.25, 11]} />
+            <meshStandardMaterial color={C.line} />
+          </mesh>
+        ))}
+      </group>
+      <Label pos={[BECI_DOOR_X, 6.2, z1 + 0.6]} text="Beci · legume și fructe" tone="green" />
     </group>
   );
 }
@@ -323,17 +378,11 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
       [x, z] = slot(index);
       heading = 0;
     } else if (st.status === "loading") {
-      const m = (t - truck.loadStart) / MANEUVER_MIN;
-      if (m < 1) {
-        const a = along(toDockPath(truck, index), m, true);
-        [x, z] = a.p;
-        heading = a.heading;
-      } else {
-        x = dockX(truck.dock);
-        z = DOCK_TRUCK_Z;
-      }
+      const a = loadingPose(truck, index, t);
+      [x, z] = a.p;
+      heading = a.heading;
     } else if (st.status === "departing" || st.status === "arriving") {
-      const a = st.status === "departing" ? along(departPath(truck), st.yard) : along(arrivePath(index), st.yard, true);
+      const a = st.status === "departing" ? along(departPath, st.yard) : along(arrivePath(index), st.yard, true);
       [x, z] = a.p;
       heading = a.heading;
     } else visible = false;
@@ -350,7 +399,8 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
     g.userData.worldX = x;
     g.userData.worldZ = z;
     if (ring.current) ring.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 4) * 0.06);
-    const next = visible && st.status === "loading" ? `${truck.label} · încărcare ${Math.round(st.progress * 100)}%` : null;
+    const place = st.status === "loading" ? loadingPlace(truck, t) : null;
+    const next = visible && place ? `${truck.label} · ${PLACE_LABEL[place].toLowerCase()}` : null;
     if (next !== lastLabel.current) {
       lastLabel.current = next;
       setLabel(next);
@@ -388,20 +438,23 @@ function YardTruck({ truck, index }: { truck: Truck; index: number }) {
   );
 }
 
-/** Staged pallets at each dock and a forklift shuttling them into the truck being loaded. */
-function DockActivity({ dock }: { dock: number }) {
+/** Staged goods and a forklift shuttling them into the truck at the ramp or at the beci. */
+function LoadingActivity({ place }: { place: "rampa" | "beci" }) {
   const fork = useRef<Group>(null);
   const pallets = useRef<Group>(null);
+  const x0 = place === "rampa" ? RAMP_X : BECI_DOOR_X;
+  const zDoor = place === "rampa" ? B.z1 : BECI.z1;
   useFrame(({ clock }) => {
     const { t, trucks } = useUi.getState();
-    const loading = trucks.find((tr) => tr.dock === dock && t >= tr.loadStart && t < tr.departAt);
-    const progress = loading ? (t - loading.loadStart) / (loading.departAt - loading.loadStart) : 0;
+    const loading = trucks.find((tr) => loadingPlace(tr, t) === place);
+    const win = loading && (place === "beci" ? loading.beci! : loading.ramp);
+    const progress = win ? (t - win.from) / (win.to - win.from) : 0;
     if (pallets.current) pallets.current.children.forEach((c, i) => (c.visible = !!loading && i >= Math.floor(progress * 6)));
     if (fork.current) {
       fork.current.visible = !!loading;
-      const ph = (clock.elapsedTime * 0.35 + dock * 0.17) % 1;
+      const ph = (clock.elapsedTime * 0.35 + (place === "beci" ? 0.4 : 0)) % 1;
       const s = ph < 0.5 ? ph * 2 : 2 - ph * 2;
-      fork.current.position.set(dockX(dock) + 1.2, 0.2, -3 + s * 7);
+      fork.current.position.set(x0 + 1.2, place === "beci" ? 0.1 : 0.2, zDoor - 6 + s * 6);
       fork.current.rotation.y = ph < 0.5 ? 0 : Math.PI;
     }
   });
@@ -409,7 +462,7 @@ function DockActivity({ dock }: { dock: number }) {
     <group>
       <group ref={pallets}>
         {Array.from({ length: 6 }, (_, i) => (
-          <Pallet key={i} pos={[dockX(dock) - 2 + (i % 2) * 1.5, 0.2, -1.5 - Math.floor(i / 2) * 1.6]} color="#d8b37a" h={0.9} />
+          <Pallet key={i} pos={[x0 - 2 + (i % 2) * 1.5, place === "beci" ? 0.1 : 0.2, zDoor - 2 - Math.floor(i / 2) * 1.6]} color={place === "beci" ? "#c49a62" : "#d8b37a"} h={0.9} />
         ))}
       </group>
       <ForkliftModel ref={fork} carrying />
@@ -537,10 +590,9 @@ export default function WarehouseScene() {
       <Ground />
       <Fence />
       <Building />
-      <Cellar />
-      {Array.from({ length: DOCK_COUNT }, (_, i) => (
-        <DockActivity key={i} dock={i + 1} />
-      ))}
+      <Beci />
+      <LoadingActivity place="rampa" />
+      <LoadingActivity place="beci" />
       {trucks.map((t, i) => (
         <YardTruck key={t.id} truck={t} index={i} />
       ))}

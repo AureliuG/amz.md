@@ -19,6 +19,23 @@ export interface Release {
 /** Released versions, newest first. */
 export const CHANGELOG: Release[] = [
   {
+    version: "1.3",
+    date: RELEASE_DATE,
+    title: "Ciclul complet: comenzi, trasee, încărcare, stoc",
+    items: [
+      "Pagina Comenzi: toate comenzile într-un singur loc, „Comandă nouă” pentru fiecare telefon (instituția, ziua livrării, produsele), „Ca ultima comandă”, mutare pe altă zi, anulare, nr. factură",
+      "Ciclul zilei pe un singur ecran: comenzi primite → trasee → încărcare → livrare → facturi",
+      "Traseele se fac din comenzile reale: traseele fixe își iau localitățile, restul se împarte pe direcții astfel încât fiecare mașină să termine până la 18:00",
+      "Pagina Trasee: pe zile (azi, mâine…), „Aprobă traseele”, comenzile fără mașină, mutarea unei comenzi pe altă mașină, foile pentru orice zi",
+      "Încărcarea ca în realitate: o singură rampă la depozit și beciul alături; o mașină la beci, una la rampă, pleacă primele cele cu drumul lung",
+      "Butonul „Încărcată” scade produsele mașinii din stoc (se poate anula)",
+      "Pagina Stoc: stocul real, ce se încarcă azi și mâine, ce rămâne, ce trebuie comandat; intrare marfă, inventariere, lista de produse, istoricul mișcărilor",
+      "Depozitul 3D: beciul lângă depozit și o singură rampă; mașinile merg la beci, așteaptă, trag la rampă și pleacă",
+      "Comenzi de test (generate și șterse dintr-un clic), ca să încercați tot ciclul",
+      "Ceasul din bara de sus nu mai mișcă glisorul când se schimbă cifrele",
+    ],
+  },
+  {
     version: "1.2",
     date: RELEASE_DATE,
     title: "Lucru în echipă, șoferi și instalare pe server",
@@ -66,36 +83,36 @@ export interface Planned {
 /** What comes next, in order. */
 export const ROADMAP: Planned[] = [
   {
-    version: "1.3",
-    title: "Date reale la zi",
+    version: "1.4",
+    title: "Date reale și 1C",
     items: [
       "Lista reală a celor ~800 de instituții pe hartă, cu adrese verificate",
+      "Comenzile, facturile și stocul vin automat din 1C 7.7 (fără a le introduce de două ori)",
       "Pozițiile reale ale mașinilor de la furnizorul GPS, traseul parcurs al zilei",
-      "Fișele complete ale mașinilor (modele, capacități, șoferi)",
       "Rapoarte simple: livrări pe zi/lună, pe mașină, întârzieri",
     ],
-    needs: ["Exportul instituțiilor din 1C (Excel)", "Numele și contactul furnizorului GPS + acces (API sau retransmisie)", "Locația exactă a depozitului"],
-  },
-  {
-    version: "1.4",
-    title: "Comenzile din 1C automat",
-    items: [
-      "Comenzile, facturile și stocul vin automat din 1C 7.7 (la fiecare 5–15 minute)",
-      "Nr. facturii pe foaia de parcurs și la fiecare livrare",
-      "Stocul real în depozitul 3D și în alerte",
-    ],
-    needs: ["Programatorul 1C al companiei (pentru un export programat din 1C 7.7)", "Un exemplu de export: o zi de comenzi și stocul"],
+    needs: ["Exportul instituțiilor din 1C (Excel)", "Programatorul 1C și un exemplu de export (o zi de comenzi + stocul)", "Contactul și accesul furnizorului GPS", "Locația exactă a depozitului"],
   },
   {
     version: "1.5",
-    title: "Planificarea traseelor",
+    title: "Comenzi online de la instituții",
     items: [
-      "Trasee pe drumuri reale (nu linii drepte), timpi de mers reali",
-      "Planificare automată: comenzile se împart pe mașini după capacitate și zonă",
-      "Traseele fixe pe zile ale săptămânii + traseele zilnice",
-      "Mutarea unei opriri pe altă mașină prin tragere cu mouse-ul",
+      "Fiecare grădiniță/instituție primește linkul ei și trimite comanda direct (fără telefon), până la o oră stabilită",
+      "Comenzile online apar pe pagina Comenzi, la fel ca cele de la telefon",
+      "Confirmare automată către instituție: „comanda a fost primită, livrare mâine”",
     ],
-    needs: ["Regulile traseelor fixe (ce mașină, ce zi, ce instituții)"],
+    needs: ["Decizia: care instituții încep primele", "Ora-limită pentru comenzi (ex. 14:00 pentru a doua zi)"],
+  },
+  {
+    version: "1.6",
+    title: "Planificare avansată",
+    items: [
+      "Trasee pe drumuri reale, timpi de mers reali",
+      "Traseele fixe pe zile ale săptămânii",
+      "Mutarea opririlor prin tragere cu mouse-ul, schimbarea ordinii",
+      "Încărcarea de seara pentru mașinile care pleacă devreme; ora de început și durata încărcării din setări",
+    ],
+    needs: ["Regulile traseelor fixe (ce mașină, ce zi, ce localități)", "Cum se încarcă azi: de la ce oră, câte minute durează o mașină"],
   },
   {
     version: "2.0",

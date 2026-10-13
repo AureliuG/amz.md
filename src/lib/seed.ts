@@ -4,14 +4,12 @@
  */
 import border from "./moldova-border.json";
 import { bearingDeg, haversineKm, pointInPolygon } from "./geo";
-import type { Institution, InstitutionType, LngLat, OrderLine, Product, Stop, Truck, TruckInfo } from "./types";
+import type { Institution, InstitutionType, LngLat, Order, OrderLine, Product, TruckInfo } from "./types";
 
 /** Warehouse location. PLACEHOLDER in Chișinău until the real coordinates are provided. */
 export const WAREHOUSE: LngLat = [28.901, 47.0245];
-export const DOCK_COUNT = 6;
 /** Deliveries are due by 18:00 the delivery day (no per-institution windows). */
 export const DELIVER_BY = 18 * 60;
-export const BACK_DOCK_COUNT = 2;
 
 function rng(seed: number) {
   return () => {
@@ -159,8 +157,6 @@ const MODELS: [string, boolean, number][] = [
 ];
 const TRUCK_COLORS = ["#2f6bff", "#13a37f", "#f08a24", "#8d5cf6", "#e2483d", "#0aa5c2", "#d9a400", "#e0559b", "#4f8a10", "#5a6b8c", "#b5651d", "#3b3fb8"];
 
-const DWELL_MIN = 14;
-
 /**
  * The real fleet as listed in the GPS client (row number = Mașina N).
  * `gps: false` = the tracker has never reported (last time 01.01 00:00:00 in the GPS client).
@@ -206,112 +202,7 @@ export function defaultTruckInfo(number: number): TruckInfo {
 }
 export const DEFAULT_FLEET: TruckInfo[] = REAL_FLEET.map((_, k) => defaultTruckInfo(k + 1));
 
-const truckColor = (k: number) => (k < TRUCK_COLORS.length ? TRUCK_COLORS[k] : `hsl(${(k * 137) % 360} 65% 48%)`);
-
-/**
- * Fleet and today's plan for `count` trucks, numbered 1..count. Chișinău gets about a quarter
- * of the trucks (split by direction), the rest split the country by direction from the warehouse.
- * Deterministic for a given count, so adding a truck re-plans the day the same way every time.
- */
-export function buildFleet(infos: TruckInfo[]): Truck[] {
-  const fleet = infos.filter((x) => x.active);
-  const count = fleet.length;
-  if (!count) return [];
-  const r = rng(7000 + count);
-  const routable = INSTITUTIONS;
-  const withGeo = routable.map((i) => ({ i, d: haversineKm(WAREHOUSE, i.pos), b: bearingDeg(WAREHOUSE, i.pos) }));
-  const cityCount = Math.max(1, Math.round(count / 4));
-  const city = withGeo.filter((x) => x.d < 14).sort((a, b) => a.b - b.b);
-  const country = withGeo.filter((x) => x.d >= 14).sort((a, b) => a.b - b.b);
-  const chunk = <T,>(arr: T[], n: number) => Array.from({ length: n }, (_, k) => arr.slice(Math.floor((k * arr.length) / n), Math.floor(((k + 1) * arr.length) / n)));
-  const sectors = count === 1 ? [withGeo] : [...chunk(city, cityCount), ...chunk(country, count - cityCount)];
-  const cityDirs = ["nord", "est", "sud", "vest", "centru", "Botanica"];
-
-  // Trucks with the farthest regions load and leave first, so everyone is back in the afternoon.
-  const meanKm = sectors.map((sec) => sec.reduce((sum, x) => sum + x.d, 0) / Math.max(1, sec.length));
-  const departRank = new Array<number>(sectors.length);
-  [...meanKm.keys()].sort((a, b) => meanKm[b] - meanKm[a]).forEach((k, rank) => (departRank[k] = rank));
-
-  let orderSeq = 41870;
-  return sectors.map((sector, k) => {
-    const isCity = k < cityCount && count > 1;
-    const want = isCity ? 15 : meanKm[k] > 150 ? 7 : meanKm[k] > 90 ? 9 : 11;
-    // Today's stops: a compact cluster around a random institution of the sector.
-    const anchor = sector[Math.floor(r() * sector.length)];
-    const today = !anchor ? [] : [...sector].sort((a, b) => haversineKm(a.i.pos, anchor.i.pos) - haversineKm(b.i.pos, anchor.i.pos)).slice(0, want).map((x) => x.i);
-    // Nearest-neighbour ordering from the warehouse (VROOM will replace this).
-    const ordered: Institution[] = [];
-    let cur: LngLat = WAREHOUSE;
-    const left = [...today];
-    while (left.length) {
-      left.sort((a, b) => haversineKm(cur, a.pos) - haversineKm(cur, b.pos));
-      const next = left.shift()!;
-      ordered.push(next);
-      cur = next.pos;
-    }
-    const info = fleet[k];
-    const { capacityKg } = info;
-    // Load the truck only up to its capacity; what doesn't fit is reported as left over.
-    const lineSets: OrderLine[][] = [];
-    const leftover = { count: 0, kg: 0 };
-    let loadKg = 0;
-    for (const inst of ordered) {
-      const lines = makeLines(inst.type, r);
-      const kg = lines.reduce((sum, l) => sum + l.qty, 0);
-      if (leftover.count > 0 || (lineSets.length > 0 && loadKg + kg > capacityKg)) {
-        leftover.count++;
-        leftover.kg += kg;
-        continue;
-      }
-      lineSets.push(lines);
-      loadKg += kg;
-    }
-    ordered.length = lineSets.length;
-    const speed = isCity ? 28 : 52;
-    const departAt = 6 * 60 + 25 + departRank[k] * 8;
-    let t = departAt;
-    let from: LngLat = WAREHOUSE;
-    let total = 0;
-    const stops: Stop[] = ordered.map((inst, s) => {
-      const km = haversineKm(from, inst.pos) * 1.3;
-      total += km;
-      t += (km / speed) * 60;
-      const lines = lineSets[s];
-      const weightKg = lines.reduce((sum, l) => sum + l.qty, 0);
-      const arriveAt = t;
-      t += DWELL_MIN + weightKg / 60;
-      from = inst.pos;
-      return { id: `S${info.number}-${s + 1}`, orderNo: `CMD-${orderSeq++}`, institutionId: inst.id, lines, weightKg: Math.round(weightKg), orderedDaysAgo: 1 + Math.floor(r() * 3), arriveAt, leaveAt: t, distanceKm: km };
-    });
-    const backKm = haversineKm(from, WAREHOUSE) * 1.3;
-    total += backKm;
-    const returnAt = t + (backKm / speed) * 60;
-    const regionTowns = [...new Set(ordered.map((o) => o.town))];
-    return {
-      id: `T${info.number}`,
-      number: info.number,
-      label: `Mașina ${info.number}`,
-      plate: info.plate,
-      trackerId: info.trackerId,
-      gpsOk: info.gpsOk,
-      model: info.model,
-      refrigerated: info.refrigerated,
-      capacityKg,
-      driver: info.driver,
-      phone: info.phone,
-      routeType: info.routeType,
-      leftover: { count: leftover.count, kg: Math.round(leftover.kg) },
-      color: truckColor(info.number - 1),
-      dock: (departRank[k] % DOCK_COUNT) + 1,
-      region: isCity ? `Chișinău · ${cityDirs[k % cityDirs.length]}` : regionTowns.slice(0, 2).join(", "),
-      loadStart: departAt - 45,
-      departAt,
-      returnAt,
-      totalKm: Math.round(total),
-      stops,
-    };
-  });
-}
+export const truckColor = (k: number) => (k < TRUCK_COLORS.length ? TRUCK_COLORS[k] : `hsl(${(k * 137) % 360} 65% 48%)`);
 
 /**
  * Demo order profile: how often a product appears in an order and the usual quantity for a
@@ -323,7 +214,7 @@ const ORDER_PROFILE: Record<string, [freq: number, min: number, max: number]> = 
   "p-flour": [0.4, 6, 15], "p-buck": [0.5, 3, 7], "p-rice": [0.5, 3, 7], "p-pasta": [0.5, 3, 7], "p-sugar": [0.5, 3, 6], "p-oil": [0.5, 2, 5], "p-salt": [0.2, 1, 2], "p-peas": [0.25, 4, 12],
 };
 
-function makeLines(type: InstitutionType, r: () => number): OrderLine[] {
+export function makeLines(type: InstitutionType, r: () => number): OrderLine[] {
   // Prisons and hospitals feed far more people than a kindergarten.
   const scale = type === "prison" ? 6 : type === "hospital" ? 3.5 : type === "school" ? 2 : type === "social" ? 1.5 : 1;
   const lines = PRODUCTS.flatMap((p) => {
@@ -378,9 +269,28 @@ export const normalize = (s: string) =>
 export const insideMoldova = (p: LngLat) => pointInPolygon(p, ring);
 export const PRODUCT_BY_ID = new Map(PRODUCTS.map((p) => [p.id, p]));
 
-/** Orders already received from 1C for the next days (demo numbers). */
-export const PIPELINE = [
-  { label: "Mâine", orders: 152, kg: 18400 },
-  { label: "Poimâine", orders: 138, kg: 16900 },
-  { label: "Peste 3 zile", orders: 61, kg: 7300 },
-];
+/**
+ * Example orders for a day, used only while no real order is registered for it (shown as "Date demo").
+ * Deterministic per date: every computer and phone sees the same example day.
+ */
+export function demoOrders(date: string): Order[] {
+  const seed = Number(date.replace(/-/g, ""));
+  const r = rng(seed);
+  const day = new Date(`${date}T12:00:00`).getTime();
+  const out: Order[] = [];
+  for (const inst of INSTITUTIONS) {
+    if (r() > 0.21) continue;
+    const n = out.length + 1;
+    out.push({
+      id: `D${date.replace(/-/g, "")}-${n}`,
+      no: `D-${String(n).padStart(4, "0")}`,
+      institutionId: inst.id,
+      date,
+      lines: makeLines(inst.type, r),
+      status: "noua",
+      createdAt: day - (1 + Math.floor(r() * 3)) * 86_400_000 - Math.floor(r() * 6) * 3_600_000,
+      source: "demo",
+    });
+  }
+  return out;
+}

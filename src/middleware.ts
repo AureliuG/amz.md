@@ -45,8 +45,9 @@ export function middleware(req: NextRequest) {
   if (!c) return challenge();
   if (office && c.pass === office) return withRole(req, "office");
   if (driver && c.user.toLowerCase() === "sofer" && c.pass === driver) {
-    // Drivers also need to read the plan (GET /api/state) and may send suggestions (POST /api/feedback).
-    if (DRIVER_PATHS.some((r) => r.test(pathname)) || (pathname === "/api/state" && req.method === "GET") || (pathname === "/api/feedback" && req.method === "POST")) {
+    // Drivers also read the day's plan (GET state, orders, plan) and may send suggestions (POST /api/feedback).
+    const readPlan = req.method === "GET" && ["/api/state", "/api/orders", "/api/plan"].includes(pathname);
+    if (DRIVER_PATHS.some((r) => r.test(pathname)) || readPlan || (pathname === "/api/feedback" && req.method === "POST")) {
       return withRole(req, "driver");
     }
     if (pathname === "/") return NextResponse.redirect(new URL("/sofer", req.url));

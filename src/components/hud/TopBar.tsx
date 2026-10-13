@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, BookOpen, CalendarRange, Database, ListChecks, Map as MapIcon, Pause, Play, Search, TriangleAlert, Warehouse } from "lucide-react";
+import { Bell, BookOpen, Boxes, ClipboardList, Database, ListChecks, Map as MapIcon, Pause, Play, Route, Search, TriangleAlert, Warehouse } from "lucide-react";
 import { computeAlerts, type Severity } from "@/lib/alerts";
 import { APP_VERSION_SHORT } from "@/lib/version";
 import { openGuide } from "../GuideView";
@@ -11,7 +11,10 @@ import { fmtTime } from "@/lib/sim";
 import { DAY_END, DAY_START, liveFix, useMinute, useTrucks, useUi } from "@/lib/store";
 
 const SPEEDS = [3, 10, 30];
-const today = () => new Date().toLocaleDateString("ro-MD", { weekday: "short", day: "2-digit", month: "2-digit" });
+const today = () => {
+  const d = new Date();
+  return `${["Du", "Lu", "Ma", "Mi", "Jo", "Vi", "Sâ"][d.getDay()]}, ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
 const todayLong = () => new Date().toLocaleDateString("ro-MD", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 export function TopBar() {
@@ -40,22 +43,27 @@ export function TopBar() {
         {(
           [
             ["warehouse", "Depozit", Warehouse],
+            ["orders", "Comenzi", ClipboardList],
+            ["planning", "Trasee", Route],
             ["map", "Moldova", MapIcon],
             ["deliveries", "Livrări", ListChecks],
-            ["planning", "Program", CalendarRange],
+            ["stock", "Stoc", Boxes],
             ["data", "Date", Database],
             ["guide", "Ghid", BookOpen],
           ] as const
-        ).map(([v, label, Icon]) => (
-          <button key={v} onClick={() => setView(v)} title={label} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition ${view === v ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+        ).map(([v, label, Icon], i) => (
+          <button key={v} onClick={() => setView(v)} title={`${label} (tasta ${i + 1})`} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition ${view === v ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
             <Icon size={14} />
             <span className="hidden 2xl:inline">{label}</span>
           </button>
         ))}
       </div>
       <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1">
-        <span title={todayLong()} className="flex items-center gap-1 whitespace-nowrap rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> <span className="hidden font-normal text-emerald-700/80 2xl:inline">{today()}</span> {fmtTime(t)}
+        {/* Fixed widths and equal-width digits, so the slider next to it never moves while the clock runs. */}
+        <span title={todayLong()} className="flex items-center gap-1 whitespace-nowrap rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-emerald-700">
+          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-500" />
+          <span className="hidden w-[62px] overflow-hidden text-ellipsis font-normal text-emerald-700/80 2xl:inline-block">{today()}</span>
+          <span className="inline-block w-[33px] text-right">{fmtTime(t)}</span>
         </span>
         <button aria-label={playing ? "Pauză" : "Pornește"} onClick={() => setPlaying(!playing)} className="grid h-6 w-6 place-items-center rounded-md text-slate-600 hover:bg-slate-100">
           {playing ? <Pause size={13} /> : <Play size={13} />}
@@ -85,8 +93,20 @@ export function TopBar() {
       <AlertsButton />
       <ActivityBell />
       <LiveBadge />
-      <span className="hidden whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200 lg:inline">Date demo</span>
+      <DemoBadge />
     </header>
+  );
+}
+
+/** Shown while today has no real orders: the routes come from example orders. */
+function DemoBadge() {
+  const demo = useUi((s) => s.today.demo);
+  const setView = useUi((s) => s.setView);
+  if (!demo) return null;
+  return (
+    <button onClick={() => setView("orders")} title="Azi nu există comenzi reale: traseele sunt făcute din comenzi exemplu. Înregistrați comenzile pe pagina Comenzi." className="hidden whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 lg:inline">
+      Comenzi demo
+    </button>
   );
 }
 
@@ -227,7 +247,9 @@ function AlertsButton() {
   const live = useUi((s) => s.live);
   const confirmations = useUi((s) => s.confirmations);
   const select = useUi((s) => s.select);
-  const alerts = useMemo(() => computeAlerts(trucks, t, { gpsMode, live, confirmations, now: Date.now() }), [trucks, t, gpsMode, live, confirmations]);
+  const levels = useUi((s) => s.levels);
+  const today = useUi((s) => s.today);
+  const alerts = useMemo(() => computeAlerts(trucks, t, { gpsMode, live, confirmations, now: Date.now(), levels, unplanned: today.unplanned, loaded: today.saved?.loaded ?? {} }), [trucks, t, gpsMode, live, confirmations, levels, today]);
   const high = alerts.filter((a) => a.severity === "high").length;
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {

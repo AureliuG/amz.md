@@ -46,6 +46,19 @@ function legBearing(a: LngLat, b: LngLat, p: number) {
   return bearingDeg(arcPoint(a, b, Math.max(0, p - 0.02)), arcPoint(a, b, Math.min(1, p + 0.02)));
 }
 
+export type LoadingPlace = "beci" | "spre-rampa" | "asteapta" | "rampa";
+
+/** Where a truck is while loading: at the beci, driving to the ramp, waiting for the ramp, or at the ramp. */
+export function loadingPlace(truck: Truck, t: number): LoadingPlace | null {
+  if (t < truck.loadStart || t >= truck.departAt) return null;
+  if (truck.beci && t < truck.beci.to) return "beci";
+  if (t >= truck.ramp.from) return "rampa";
+  if (truck.beci && t < truck.beci.to + 4) return "spre-rampa";
+  return "asteapta";
+}
+
+export const PLACE_LABEL: Record<LoadingPlace, string> = { beci: "La beci", "spre-rampa": "Merge la rampă", asteapta: "Așteaptă rampa", rampa: "La rampă" };
+
 export function stopStatus(truck: Truck, idx: number, t: number): StopStatus {
   const s = truck.stops[idx];
   if (t >= s.leaveAt) return "delivered";
