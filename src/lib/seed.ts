@@ -4,7 +4,7 @@
  */
 import border from "./moldova-border.json";
 import { bearingDeg, haversineKm, pointInPolygon } from "./geo";
-import type { Institution, InstitutionType, LngLat, OrderLine, Product, Stop, Truck } from "./types";
+import type { Institution, InstitutionType, LngLat, OrderLine, Product, Stop, Truck, TruckInfo } from "./types";
 
 /** Warehouse location. PLACEHOLDER in Chișinău until the real coordinates are provided. */
 export const WAREHOUSE: LngLat = [28.901, 47.0245];
@@ -124,27 +124,27 @@ function makeInstitutions(total: number): Institution[] {
 }
 
 export const PRODUCTS: Product[] = [
-  { id: "p-carrot", name: "Morcov", zone: "cellar", unit: "kg", stock: 4200, min: 1500, color: "#f08a24" },
-  { id: "p-potato", name: "Cartofi", zone: "cellar", unit: "kg", stock: 11800, min: 4000, color: "#b98a4f" },
-  { id: "p-onion", name: "Ceapă", zone: "cellar", unit: "kg", stock: 2600, min: 1200, color: "#d9b26a" },
-  { id: "p-cabbage", name: "Varză", zone: "cellar", unit: "kg", stock: 1400, min: 1500, color: "#8cc56b" },
+  { id: "p-carrot", name: "Morcov", zone: "cellar", unit: "kg", stock: 5200, min: 2500, color: "#f08a24" },
+  { id: "p-potato", name: "Cartofi", zone: "cellar", unit: "kg", stock: 14800, min: 7000, color: "#b98a4f" },
+  { id: "p-onion", name: "Ceapă", zone: "cellar", unit: "kg", stock: 2900, min: 1400, color: "#d9b26a" },
+  { id: "p-cabbage", name: "Varză", zone: "cellar", unit: "kg", stock: 1400, min: 2400, color: "#8cc56b" },
   { id: "p-beet", name: "Sfeclă", zone: "cellar", unit: "kg", stock: 1900, min: 800, color: "#a3324f" },
-  { id: "p-apple", name: "Mere", zone: "cellar", unit: "kg", stock: 3500, min: 1500, color: "#e2483d" },
-  { id: "p-pear", name: "Pere", zone: "cellar", unit: "kg", stock: 640, min: 700, color: "#d6cc4a" },
-  { id: "p-milk", name: "Lapte 2,5%", zone: "cold", unit: "l", stock: 2400, min: 1000, color: "#e8eef9" },
-  { id: "p-sour", name: "Smântână", zone: "cold", unit: "kg", stock: 380, min: 200, color: "#f3f1e4" },
-  { id: "p-cheese", name: "Brânză de vaci", zone: "cold", unit: "kg", stock: 520, min: 300, color: "#f6efd2" },
-  { id: "p-butter", name: "Unt 72%", zone: "cold", unit: "kg", stock: 210, min: 250, color: "#f4dc7c" },
-  { id: "p-chicken", name: "Carne de pui", zone: "cold", unit: "kg", stock: 1300, min: 600, color: "#f2b9a4" },
-  { id: "p-beef", name: "Carne de vită", zone: "cold", unit: "kg", stock: 690, min: 400, color: "#c2504a" },
-  { id: "p-fish", name: "Pește (hec)", zone: "cold", unit: "kg", stock: 330, min: 200, color: "#9fb7cf" },
+  { id: "p-apple", name: "Mere", zone: "cellar", unit: "kg", stock: 4800, min: 2500, color: "#e2483d" },
+  { id: "p-pear", name: "Pere", zone: "cellar", unit: "kg", stock: 640, min: 750, color: "#d6cc4a" },
+  { id: "p-milk", name: "Lapte 2,5%", zone: "cold", unit: "l", stock: 9600, min: 6000, color: "#e8eef9" },
+  { id: "p-sour", name: "Smântână", zone: "cold", unit: "kg", stock: 650, min: 300, color: "#f3f1e4" },
+  { id: "p-cheese", name: "Brânză de vaci", zone: "cold", unit: "kg", stock: 1800, min: 900, color: "#f6efd2" },
+  { id: "p-butter", name: "Unt 72%", zone: "cold", unit: "kg", stock: 380, min: 450, color: "#f4dc7c" },
+  { id: "p-chicken", name: "Carne de pui", zone: "cold", unit: "kg", stock: 3600, min: 1800, color: "#f2b9a4" },
+  { id: "p-beef", name: "Carne de vită", zone: "cold", unit: "kg", stock: 2100, min: 1000, color: "#c2504a" },
+  { id: "p-fish", name: "Pește (hec)", zone: "cold", unit: "kg", stock: 1400, min: 700, color: "#9fb7cf" },
   { id: "p-flour", name: "Făină", zone: "dry", unit: "kg", stock: 6100, min: 2000, color: "#efe6d2" },
-  { id: "p-buck", name: "Hrișcă", zone: "dry", unit: "kg", stock: 1700, min: 800, color: "#8f6b4a" },
-  { id: "p-rice", name: "Orez", zone: "dry", unit: "kg", stock: 2200, min: 800, color: "#f5f3ea" },
-  { id: "p-pasta", name: "Paste făinoase", zone: "dry", unit: "kg", stock: 1850, min: 700, color: "#e9cf7d" },
+  { id: "p-buck", name: "Hrișcă", zone: "dry", unit: "kg", stock: 2100, min: 1000, color: "#8f6b4a" },
+  { id: "p-rice", name: "Orez", zone: "dry", unit: "kg", stock: 2200, min: 900, color: "#f5f3ea" },
+  { id: "p-pasta", name: "Paste făinoase", zone: "dry", unit: "kg", stock: 1900, min: 900, color: "#e9cf7d" },
   { id: "p-sugar", name: "Zahăr", zone: "dry", unit: "kg", stock: 2900, min: 1000, color: "#fbfbfb" },
-  { id: "p-oil", name: "Ulei de floarea-soarelui", zone: "dry", unit: "l", stock: 1450, min: 600, color: "#f1c94b" },
-  { id: "p-salt", name: "Sare iodată", zone: "dry", unit: "kg", stock: 760, min: 300, color: "#dfe5ee" },
+  { id: "p-oil", name: "Ulei de floarea-soarelui", zone: "dry", unit: "l", stock: 1450, min: 700, color: "#f1c94b" },
+  { id: "p-salt", name: "Sare iodată", zone: "dry", unit: "kg", stock: 760, min: 150, color: "#dfe5ee" },
   { id: "p-peas", name: "Mazăre conservată", zone: "dry", unit: "pcs", stock: 480, min: 500, color: "#7fb05a" },
 ];
 
@@ -183,8 +183,28 @@ export const REAL_FLEET: { plate: string; tracker: string; gps: boolean }[] = [
   { plate: "BKB 717", tracker: "068232", gps: true },
   { plate: "BKB 702", tracker: "068233", gps: true },
 ];
-export const DEFAULT_TRUCK_COUNT = REAL_FLEET.length;
-export const MAX_TRUCKS = 24;
+export const MAX_TRUCKS = 30;
+
+/** Fleet cards before anyone edits them: real plates/trackers, demo models, drivers and phones. */
+export function defaultTruckInfo(number: number): TruckInfo {
+  const k = number - 1;
+  const r = rng(9100 + number);
+  const [model, refrigerated, capacityKg] = MODELS[k % MODELS.length];
+  return {
+    number,
+    plate: REAL_FLEET[k]?.plate ?? "",
+    trackerId: REAL_FLEET[k]?.tracker ?? "",
+    gpsOk: REAL_FLEET[k]?.gps ?? false,
+    model,
+    capacityKg,
+    refrigerated,
+    driver: DRIVERS[k % DRIVERS.length],
+    phone: `+373 6${Math.floor(r() * 9)} ${100 + Math.floor(r() * 899)} ${100 + Math.floor(r() * 899)}`,
+    routeType: k % 3 === 0 ? "fix" : "zilnic",
+    active: true,
+  };
+}
+export const DEFAULT_FLEET: TruckInfo[] = REAL_FLEET.map((_, k) => defaultTruckInfo(k + 1));
 
 const truckColor = (k: number) => (k < TRUCK_COLORS.length ? TRUCK_COLORS[k] : `hsl(${(k * 137) % 360} 65% 48%)`);
 
@@ -193,9 +213,13 @@ const truckColor = (k: number) => (k < TRUCK_COLORS.length ? TRUCK_COLORS[k] : `
  * of the trucks (split by direction), the rest split the country by direction from the warehouse.
  * Deterministic for a given count, so adding a truck re-plans the day the same way every time.
  */
-export function buildFleet(count: number): Truck[] {
+export function buildFleet(infos: TruckInfo[]): Truck[] {
+  const fleet = infos.filter((x) => x.active);
+  const count = fleet.length;
+  if (!count) return [];
   const r = rng(7000 + count);
-  const withGeo = INSTITUTIONS.map((i) => ({ i, d: haversineKm(WAREHOUSE, i.pos), b: bearingDeg(WAREHOUSE, i.pos) }));
+  const routable = INSTITUTIONS;
+  const withGeo = routable.map((i) => ({ i, d: haversineKm(WAREHOUSE, i.pos), b: bearingDeg(WAREHOUSE, i.pos) }));
   const cityCount = Math.max(1, Math.round(count / 4));
   const city = withGeo.filter((x) => x.d < 14).sort((a, b) => a.b - b.b);
   const country = withGeo.filter((x) => x.d >= 14).sort((a, b) => a.b - b.b);
@@ -225,14 +249,20 @@ export function buildFleet(count: number): Truck[] {
       ordered.push(next);
       cur = next.pos;
     }
-    const [model, refrigerated, capacityKg] = MODELS[k % MODELS.length];
-    // Load the truck only up to its capacity; the rest waits for another day/truck.
+    const info = fleet[k];
+    const { capacityKg } = info;
+    // Load the truck only up to its capacity; what doesn't fit is reported as left over.
     const lineSets: OrderLine[][] = [];
+    const leftover = { count: 0, kg: 0 };
     let loadKg = 0;
     for (const inst of ordered) {
       const lines = makeLines(inst.type, r);
       const kg = lines.reduce((sum, l) => sum + l.qty, 0);
-      if (lineSets.length > 0 && loadKg + kg > capacityKg) break;
+      if (leftover.count > 0 || (lineSets.length > 0 && loadKg + kg > capacityKg)) {
+        leftover.count++;
+        leftover.kg += kg;
+        continue;
+      }
       lineSets.push(lines);
       loadKg += kg;
     }
@@ -251,25 +281,27 @@ export function buildFleet(count: number): Truck[] {
       const arriveAt = t;
       t += DWELL_MIN + weightKg / 60;
       from = inst.pos;
-      return { id: `S${k + 1}-${s + 1}`, orderNo: `CMD-${orderSeq++}`, institutionId: inst.id, lines, weightKg: Math.round(weightKg), orderedDaysAgo: 1 + Math.floor(r() * 3), arriveAt, leaveAt: t, distanceKm: km };
+      return { id: `S${info.number}-${s + 1}`, orderNo: `CMD-${orderSeq++}`, institutionId: inst.id, lines, weightKg: Math.round(weightKg), orderedDaysAgo: 1 + Math.floor(r() * 3), arriveAt, leaveAt: t, distanceKm: km };
     });
     const backKm = haversineKm(from, WAREHOUSE) * 1.3;
     total += backKm;
     const returnAt = t + (backKm / speed) * 60;
     const regionTowns = [...new Set(ordered.map((o) => o.town))];
     return {
-      id: `T${k + 1}`,
-      number: k + 1,
-      label: `Mașina ${k + 1}`,
-      plate: REAL_FLEET[k]?.plate ?? "",
-      trackerId: REAL_FLEET[k]?.tracker ?? "",
-      gpsOk: REAL_FLEET[k]?.gps ?? false,
-      model,
-      refrigerated,
+      id: `T${info.number}`,
+      number: info.number,
+      label: `Mașina ${info.number}`,
+      plate: info.plate,
+      trackerId: info.trackerId,
+      gpsOk: info.gpsOk,
+      model: info.model,
+      refrigerated: info.refrigerated,
       capacityKg,
-      driver: DRIVERS[k % DRIVERS.length],
-      phone: `+373 6${Math.floor(r() * 9)} ${100 + Math.floor(r() * 899)} ${100 + Math.floor(r() * 899)}`,
-      color: truckColor(k),
+      driver: info.driver,
+      phone: info.phone,
+      routeType: info.routeType,
+      leftover: { count: leftover.count, kg: Math.round(leftover.kg) },
+      color: truckColor(info.number - 1),
       dock: (departRank[k] % DOCK_COUNT) + 1,
       region: isCity ? `Chișinău · ${cityDirs[k % cityDirs.length]}` : regionTowns.slice(0, 2).join(", "),
       loadStart: departAt - 45,
@@ -281,11 +313,24 @@ export function buildFleet(count: number): Truck[] {
   });
 }
 
+/**
+ * Demo order profile: how often a product appears in an order and the usual quantity for a
+ * kindergarten-sized delivery (2–3 days of meals). Replaced by real 1C orders later.
+ */
+const ORDER_PROFILE: Record<string, [freq: number, min: number, max: number]> = {
+  "p-carrot": [0.8, 5, 12], "p-potato": [0.9, 12, 30], "p-onion": [0.7, 3, 7], "p-cabbage": [0.6, 6, 15], "p-beet": [0.5, 3, 7], "p-apple": [0.7, 6, 15], "p-pear": [0.35, 3, 9],
+  "p-milk": [0.8, 12, 30], "p-sour": [0.4, 1, 4], "p-cheese": [0.5, 2, 6], "p-butter": [0.6, 1, 3], "p-chicken": [0.6, 5, 12], "p-beef": [0.4, 4, 9], "p-fish": [0.3, 3, 7],
+  "p-flour": [0.4, 6, 15], "p-buck": [0.5, 3, 7], "p-rice": [0.5, 3, 7], "p-pasta": [0.5, 3, 7], "p-sugar": [0.5, 3, 6], "p-oil": [0.5, 2, 5], "p-salt": [0.2, 1, 2], "p-peas": [0.25, 4, 12],
+};
+
 function makeLines(type: InstitutionType, r: () => number): OrderLine[] {
+  // Prisons and hospitals feed far more people than a kindergarten.
   const scale = type === "prison" ? 6 : type === "hospital" ? 3.5 : type === "school" ? 2 : type === "social" ? 1.5 : 1;
-  const n = 5 + Math.floor(r() * 5);
-  const chosen = [...PRODUCTS].sort(() => r() - 0.5).slice(0, n);
-  return chosen.map((p) => ({ productId: p.id, qty: Math.round((4 + r() * 26) * scale) }));
+  const lines = PRODUCTS.flatMap((p) => {
+    const [freq, min, max] = ORDER_PROFILE[p.id] ?? [0.3, 2, 6];
+    return r() < freq ? [{ productId: p.id, qty: Math.max(1, Math.round((min + r() * (max - min)) * scale)) }] : [];
+  });
+  return lines.length >= 3 ? lines : [{ productId: "p-potato", qty: Math.round(15 * scale) }, { productId: "p-milk", qty: Math.round(15 * scale) }, ...lines];
 }
 
 export const INSTITUTIONS = makeInstitutions(800);

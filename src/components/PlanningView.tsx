@@ -1,6 +1,8 @@
 "use client";
 
+import { Printer } from "lucide-react";
 import { useMemo, useState } from "react";
+import { printSheets } from "./PrintSheets";
 import { DELIVER_BY, INSTITUTION_BY_ID } from "@/lib/seed";
 import { STATUS_LABEL, STATUS_TONE, fmtTime, truckState } from "@/lib/sim";
 import { DAY_END, DAY_START, useMinute, useTrucks, useUi } from "@/lib/store";
@@ -60,6 +62,14 @@ export function PlanningView() {
             <div>
               <div className="text-[14px] font-semibold text-slate-900">Programul zilei</div>
               <div className="text-[11px] text-slate-500">Fiecare rând este o mașină. Linia albastră arată ora curentă.</div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button onClick={() => printSheets(trucks.map((x) => x.id), "loading")} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+                  <Printer size={12} /> Toate foile de încărcare
+                </button>
+                <button onClick={() => printSheets(trucks.map((x) => x.id), "route")} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+                  <Printer size={12} /> Toate foile de parcurs
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
               {(Object.keys(KIND) as Kind[]).map((k) => (

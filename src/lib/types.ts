@@ -48,6 +48,34 @@ export interface Stop {
   distanceKm: number;
 }
 
+/** Editable fleet card for one vehicle (saved on the server, edited on the Date page). */
+export interface TruckInfo {
+  number: number;
+  plate: string;
+  trackerId: string;
+  /** False when the tracker is known not to report (e.g. never connected in the GPS client). */
+  gpsOk: boolean;
+  model: string;
+  capacityKg: number;
+  refrigerated: boolean;
+  driver: string;
+  phone: string;
+  /** Fixed route (same institutions on set weekdays) or planned fresh every day. */
+  routeType: "fix" | "zilnic";
+  /** Inactive vehicles (service, no driver) are kept on file but not planned. */
+  active: boolean;
+  notes?: string;
+}
+
+/** What a driver reported for a delivery (from the Șofer page). Keyed by order number. */
+export interface Confirmation {
+  orderNo: string;
+  truck: number;
+  status: "arrived" | "delivered" | "problem";
+  reason?: string;
+  ts: number;
+}
+
 export interface Truck {
   id: string;
   /** Fleet number shown everywhere ("Mașina 3"). */
@@ -64,6 +92,9 @@ export interface Truck {
   capacityKg: number;
   driver: string;
   phone: string;
+  routeType: "fix" | "zilnic";
+  /** Orders of this truck's area that did not fit within its capacity today. */
+  leftover: { count: number; kg: number };
   color: string;
   dock: number;
   region: string;

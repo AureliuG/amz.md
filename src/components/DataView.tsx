@@ -1,10 +1,11 @@
 "use client";
 
-import { CheckCircle2, Download, FileSpreadsheet, LocateFixed, MapPin, RadioTower, RotateCcw, Upload, Warehouse } from "lucide-react";
+import { CheckCircle2, Cloud, Download, FileSpreadsheet, HardDrive, LocateFixed, MapPin, MonitorCog, Plus, RadioTower, RotateCcw, Save, Truck as TruckIcon, Upload, Warehouse } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FIELD_LABEL, TEMPLATE_CSV, autoMap, geocode, parseLocation, readTable, toInstitutions, type Field, type ImportRow, type Mapping } from "@/lib/importer";
-import { DATA_SOURCE, DEFAULT_WAREHOUSE, INSTITUTIONS, WAREHOUSE } from "@/lib/seed";
-import { useTrucks, useUi } from "@/lib/store";
+import { DATA_SOURCE, DEFAULT_WAREHOUSE, defaultTruckInfo, INSTITUTIONS, MAX_TRUCKS, WAREHOUSE } from "@/lib/seed";
+import { liveFix, useTrucks, useUi } from "@/lib/store";
+import type { TruckInfo } from "@/lib/types";
 import { Card, Chip } from "./hud/ui";
 
 const FIELDS: Field[] = ["name", "town", "address", "lat", "lng", "coords", "phone", "code", "type"];
@@ -39,11 +40,138 @@ export function DataView() {
   return (
     <div className="absolute inset-0 overflow-y-auto bg-[#eef2fb]">
       <div className="mx-auto flex max-w-[1100px] flex-col gap-3 p-3 sm:p-4">
+        <StorageNote />
         <WarehouseSection />
+        <FleetSection />
         <InstitutionsSection />
         <GpsSection />
+        <DisplaySection />
       </div>
     </div>
+  );
+}
+
+function StorageNote() {
+  const storage = useUi((s) => s.storage);
+  if (storage === "loading") return null;
+  return storage === "server" ? (
+    <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800 ring-1 ring-emerald-200">
+      <Cloud size={14} /> Datele de mai jos se salvează pe server și sunt aceleași pe toate calculatoarele din oficiu.
+    </div>
+  ) : (
+    <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-[12px] text-amber-800 ring-1 ring-amber-200">
+      <HardDrive size={14} /> Serverul nu răspunde: modificările se păstrează doar în acest browser.
+    </div>
+  );
+}
+
+const cell = "h-8 w-full rounded-lg border border-transparent bg-transparent px-1.5 text-[12px] text-slate-800 outline-none hover:border-slate-200 focus:border-blue-300 focus:bg-white";
+
+/** Fleet cards: what the GPS client and the office know about each vehicle. */
+function FleetSection() {
+  const fleet = useUi((s) => s.fleet);
+  const updateFleet = useUi((s) => s.updateFleet);
+  const [draft, setDraft] = useState<TruckInfo[]>(fleet);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => setDraft(fleet), [fleet]);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(fleet);
+  const edit = (i: number, patch: Partial<TruckInfo>) => setDraft((d) => d.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+
+  return (
+    <Section icon={<TruckIcon size={18} />} title="Flota" sub="Numărul mașinii este același ca în programul GPS. Mașinile inactive (în service, fără șofer) nu primesc trasee.">
+      <div className="overflow-x-auto rounded-xl border border-slate-100">
+        <table className="w-full min-w-[1120px] text-left text-[12px]">
+          <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500">
+            <tr>
+              <th className="px-2 py-2">Nr.</th>
+              <th className="px-2 py-2">Nr. înmatriculare</th>
+              <th className="px-2 py-2">Tracker GPS</th>
+              <th className="px-2 py-2">Model</th>
+              <th className="px-2 py-2">Capacitate, kg</th>
+              <th className="px-2 py-2" title="Poate transporta lactate, carne, pește">Frigorific</th>
+              <th className="px-2 py-2">Șofer</th>
+              <th className="px-2 py-2">Telefon</th>
+              <th className="px-2 py-2">Traseu</th>
+              <th className="px-2 py-2">Activă</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {draft.map((f, i) => (
+              <tr key={f.number} className={f.active ? "" : "bg-slate-50/80 text-slate-400"}>
+                <td className="px-2 py-1 font-semibold text-slate-700">{f.number}</td>
+                <td className="px-1 py-1">
+                  <input className={cell} value={f.plate} onChange={(e) => edit(i, { plate: e.target.value.toUpperCase() })} placeholder="ABC 123" />
+                </td>
+                <td className="px-1 py-1">
+                  <div className="flex items-center gap-1">
+                    <input className={`${cell} tabular-nums`} value={f.trackerId} onChange={(e) => edit(i, { trackerId: e.target.value.trim() })} placeholder="—" />
+                    <input type="checkbox" title="Trackerul transmite" checked={f.gpsOk} onChange={(e) => edit(i, { gpsOk: e.target.checked })} />
+                  </div>
+                </td>
+                <td className="px-1 py-1">
+                  <input className={`${cell} min-w-[190px]`} value={f.model} onChange={(e) => edit(i, { model: e.target.value })} />
+                </td>
+                <td className="px-1 py-1">
+                  <input className={`${cell} w-20 tabular-nums`} type="number" min={100} step={100} value={f.capacityKg} onChange={(e) => edit(i, { capacityKg: Math.max(0, Number(e.target.value) || 0) })} />
+                </td>
+                <td className="px-2 py-1 text-center">
+                  <input type="checkbox" checked={f.refrigerated} onChange={(e) => edit(i, { refrigerated: e.target.checked })} />
+                </td>
+                <td className="px-1 py-1">
+                  <input className={cell} value={f.driver} onChange={(e) => edit(i, { driver: e.target.value })} placeholder="Nume Prenume" />
+                </td>
+                <td className="px-1 py-1">
+                  <input className={cell} value={f.phone} onChange={(e) => edit(i, { phone: e.target.value })} placeholder="+373 …" />
+                </td>
+                <td className="px-1 py-1">
+                  <select className={`${cell} min-w-[78px]`} value={f.routeType} onChange={(e) => edit(i, { routeType: e.target.value as TruckInfo["routeType"] })}>
+                    <option value="fix">fix</option>
+                    <option value="zilnic">zilnic</option>
+                  </select>
+                </td>
+                <td className="px-2 py-1 text-center">
+                  <input type="checkbox" checked={f.active} onChange={(e) => edit(i, { active: e.target.checked })} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          className={secondary}
+          disabled={draft.length >= MAX_TRUCKS}
+          onClick={() => {
+            const next = Math.max(0, ...draft.map((d) => d.number)) + 1;
+            setDraft((d) => [...d, { ...defaultTruckInfo(next), plate: "", trackerId: "", gpsOk: false, driver: "", phone: "" }]);
+          }}
+        >
+          <Plus size={13} /> Adaugă mașină
+        </button>
+        {dirty && (
+          <button className={secondary} onClick={() => setDraft(fleet)}>
+            Anulează
+          </button>
+        )}
+        <button className={primary} disabled={!dirty} onClick={() => void updateFleet(draft).then((where) => setMsg(where === "server" ? "Flota a fost salvată." : "Salvat doar în acest browser."))}>
+          <Save size={13} /> Salvează flota
+        </button>
+        {msg && !dirty && <span className="text-[12px] text-slate-600">{msg}</span>}
+        <span className="ml-auto text-[11px] text-slate-400">Modelele, șoferii și telefoanele sunt exemple până le completați.</span>
+      </div>
+    </Section>
+  );
+}
+
+function DisplaySection() {
+  const lowGfx = useUi((s) => s.lowGfx);
+  const setLowGfx = useUi((s) => s.setLowGfx);
+  return (
+    <Section icon={<MonitorCog size={18} />} title="Afișare" sub="Pentru calculatoare mai vechi: fără umbre și cu rezoluție mai mică în vederea 3D.">
+      <label className="flex items-center gap-2 text-[12.5px] text-slate-700">
+        <input type="checkbox" checked={lowGfx} onChange={(e) => setLowGfx(e.target.checked)} /> Grafică simplificată (recomandat dacă depozitul 3D merge greu)
+      </label>
+    </Section>
   );
 }
 
@@ -69,15 +197,14 @@ function WarehouseSection() {
               setMsg(/goo\.gl|maps\.app/.test(text) ? "Link-urile scurte (maps.app.goo.gl) nu pot fi citite. În Google Maps țineți apăsat pe pin și copiați cele două numere." : "Nu am recunoscut coordonatele, sau sunt în afara Moldovei.");
               return;
             }
-            moveWarehouse(p);
-            setMsg(`Salvat: ${p[1].toFixed(5)}, ${p[0].toFixed(5)}`);
+            void moveWarehouse(p).then((where) => setMsg(`Salvat: ${p[1].toFixed(5)}, ${p[0].toFixed(5)}${where === "local" ? " (doar în acest browser)" : ""}`));
             setText("");
           }}
         >
           <LocateFixed size={14} /> Salvează
         </button>
         {!isDefault && (
-          <button className={secondary} onClick={() => (moveWarehouse(null), setMsg("Revenit la locația implicită."))}>
+          <button className={secondary} onClick={() => void moveWarehouse(null).then(() => setMsg("Revenit la locația implicită."))}>
             <RotateCcw size={13} /> Implicit
           </button>
         )}
@@ -155,7 +282,7 @@ function InstitutionsSection() {
         Acum în aplicație: <b className="text-slate-800">{INSTITUTIONS.length}</b> instituții
         {DATA_SOURCE.institutions === "demo" ? <Chip tone="amber">date demo</Chip> : <Chip tone="green">importate</Chip>}
         {DATA_SOURCE.institutions === "import" && (
-          <button className="text-blue-600 hover:underline" onClick={() => (applyInstitutions(null), setMsg("Revenit la datele demo."))}>
+          <button className="text-blue-600 hover:underline" onClick={() => void applyInstitutions(null).then(() => setMsg("Revenit la datele demo."))}>
             revino la demo
           </button>
         )}
@@ -226,8 +353,9 @@ function InstitutionsSection() {
                 className={primary}
                 disabled={!usable.length || !!busy}
                 onClick={() => {
-                  const ok = applyInstitutions(usable);
-                  setMsg(`${usable.length} instituții aplicate${ok ? " și salvate în acest browser" : " (nu s-au putut salva în browser)"}. Traseele demo s-au refăcut pe ele.`);
+                  void applyInstitutions(usable).then((where) =>
+                    setMsg(`${usable.length} instituții aplicate și salvate ${where === "server" ? "pe server (vizibile pe toate calculatoarele)" : "doar în acest browser"}. Traseele demo s-au refăcut pe ele.`),
+                  );
                 }}
               >
                 <CheckCircle2 size={14} /> Aplică {usable.length} instituții
@@ -314,7 +442,7 @@ function GpsSection() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {trucks.map((t) => {
-              const p = t.trackerId ? live[t.trackerId] : undefined;
+              const p = liveFix(live, t);
               const fresh = p && now - p.ts < 15 * 60_000;
               return (
                 <tr key={t.id}>
@@ -324,7 +452,7 @@ function GpsSection() {
                   <td className="px-3 py-1.5 tabular-nums text-slate-500">{t.trackerId || "—"}</td>
                   <td className="px-3 py-1.5 text-slate-600">{p ? `${ago(p.ts)} · ${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}` : "—"}</td>
                   <td className="px-3 py-1.5 tabular-nums text-slate-600">{p?.speed !== undefined ? `${Math.round(p.speed)} km/h` : "—"}</td>
-                  <td className="px-3 py-1.5">{fresh ? <Chip tone="green">live</Chip> : p ? <Chip tone="amber">vechi</Chip> : t.gpsOk ? <Chip tone="gray">așteaptă date</Chip> : <Chip tone="red">tracker fără semnal</Chip>}</td>
+                  <td className="px-3 py-1.5">{fresh ? <Chip tone="green">{p?.source === "phone" ? "telefon" : "live"}</Chip> : p ? <Chip tone="amber">vechi</Chip> : t.gpsOk ? <Chip tone="gray">așteaptă date</Chip> : <Chip tone="red">tracker fără semnal</Chip>}</td>
                 </tr>
               );
             })}

@@ -6,8 +6,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef } from "react";
 import { arcLine, arcPoint } from "@/lib/geo";
 import { INSTITUTION_BY_ID, INSTITUTIONS, WAREHOUSE } from "@/lib/seed";
-import { stopStatus, truckState } from "@/lib/sim";
-import { useUi } from "@/lib/store";
+import { effectiveStatus, truckState } from "@/lib/sim";
+import { liveFix, useUi } from "@/lib/store";
 import type { LngLat, Truck } from "@/lib/types";
 
 /**
@@ -102,7 +102,14 @@ function traveledFeatures(trucks: Truck[], t: number) {
 
 function institutionFeatures(trucks: Truck[], t: number) {
   const today = new Map<string, { status: string; truck: string; color: string }>();
-  trucks.forEach((tr) => tr.stops.forEach((s, i) => today.set(s.institutionId, { status: stopStatus(tr, i, t), truck: tr.id, color: tr.color })));
+  const { confirmations } = useUi.getState();
+  trucks.forEach((tr) =>
+    tr.stops.forEach((s, i) => {
+      // A driver's confirmation is the truth; the simulation fills in the rest.
+      const status = effectiveStatus(tr, i, t, confirmations);
+      today.set(s.institutionId, { status, truck: tr.id, color: tr.color });
+    }),
+  );
   return fc(
     INSTITUTIONS.map((inst) => {
       const d = today.get(inst.id);
@@ -166,7 +173,7 @@ export default function MoldovaMap() {
         filter: ["!=", ["get", "status"], "none"],
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 4, 11, 8],
-          "circle-color": ["match", ["get", "status"], "delivered", "#16a34a", "unloading", "#f59e0b", ["get", "color"]],
+          "circle-color": ["match", ["get", "status"], "delivered", "#16a34a", "unloading", "#f59e0b", "problem", "#e11d48", ["get", "color"]],
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 1.6,
         },
@@ -219,6 +226,7 @@ export default function MoldovaMap() {
     }
     const unsubFleet = useUi.subscribe((s, prev) => {
       if (s.trucks !== prev.trucks && map.getSource("routes")) syncTrucks(s.trucks);
+      if (s.confirmations !== prev.confirmations) (map.getSource("insts") as GeoJSONSource | undefined)?.setData(institutionFeatures(s.trucks, s.t));
       if (s.dataVersion !== prev.dataVersion) {
         whMarker?.setLngLat(WAREHOUSE);
         (map.getSource("insts") as GeoJSONSource | undefined)?.setData(institutionFeatures(s.trucks, s.t));
@@ -241,7 +249,7 @@ export default function MoldovaMap() {
           if (!ref) return;
           const st = truckState(tr, t);
           // Live mode: a fresh GPS fix (< 15 min) wins over the simulation.
-          const fix = gpsMode === "live" && tr.trackerId ? live[tr.trackerId] : undefined;
+          const fix = gpsMode === "live" ? liveFix(live, tr) : undefined;
           const isLive = !!fix && now - fix.ts < 15 * 60_000;
           ref.marker.setLngLat(isLive ? [fix.lng, fix.lat] : st.pos);
           ref.el.classList.toggle("is-live", isLive);

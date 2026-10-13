@@ -1,11 +1,32 @@
 "use client";
 
-import { Building2, FileText, MapPin, Package, Phone, Warehouse, X } from "lucide-react";
+import { Building2, CheckCircle2, CircleAlert, FileText, MapPin, Package, Phone, Printer, Warehouse, X } from "lucide-react";
+import { demandByProduct } from "@/lib/alerts";
 import { INSTITUTION_BY_ID, PRODUCT_BY_ID, PRODUCTS } from "@/lib/seed";
-import { STATUS_LABEL, STATUS_TONE, fmtDur, fmtTime, isOnTime, stopStatus, truckState } from "@/lib/sim";
-import { useMinute, useTrucks, useUi } from "@/lib/store";
+import { STATUS_LABEL, STATUS_TONE, effectiveStatus, fmtDur, fmtTime, isOnTime, truckState } from "@/lib/sim";
+import { liveFix, useMinute, useTrucks, useUi } from "@/lib/store";
 import type { InstitutionType, Selection, StorageZone, Truck } from "@/lib/types";
+import { printSheets } from "../PrintSheets";
 import { Bar, Card, Chip, Row } from "./ui";
+
+const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("ro-MD", { hour: "2-digit", minute: "2-digit" });
+
+/** Small mark for what the driver reported on a delivery. */
+function ConfirmMark({ orderNo }: { orderNo: string }) {
+  const c = useUi((s) => s.confirmations[orderNo]);
+  if (!c) return null;
+  if (c.status === "problem")
+    return (
+      <span title={`Problemă: ${c.reason ?? ""} (${hhmm(c.ts)})`} className="text-rose-600">
+        <CircleAlert size={13} />
+      </span>
+    );
+  return (
+    <span title={`${c.status === "delivered" ? "Livrare confirmată" : "Sosire confirmată"} de șofer la ${hhmm(c.ts)}`} className={c.status === "delivered" ? "text-emerald-600" : "text-sky-600"}>
+      <CheckCircle2 size={13} />
+    </span>
+  );
+}
 
 const TYPE_LABEL: Record<InstitutionType, string> = { kindergarten: "Grădiniță", school: "Școală", hospital: "Spital", prison: "Penitenciar", social: "Asistență socială" };
 const ZONE_LABEL: Record<StorageZone | "office", string> = { cellar: "Depozit subteran", cold: "Cameră frigorifică", dry: "Rafturi produse uscate", office: "Oficiu" };
@@ -52,6 +73,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
   const t = useMinute();
   const trucks = useTrucks();
   const select = useUi((s) => s.select);
+  const confirmations = useUi((s) => s.confirmations);
 
   if (sel.kind === "truck") {
     const tr = trucks.find((x) => x.id === sel.id);
@@ -79,19 +101,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
           {st.delivered}/{tr.stops.length} opriri livrate
         </div>
         <Row k="Nr. înmatriculare" v={tr.plate || <span className="text-slate-400">de completat</span>} />
-        <Row
-          k="GPS"
-          v={
-            tr.trackerId ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="text-slate-400">tracker {tr.trackerId}</span>
-                {tr.gpsOk ? <Chip tone="green">semnal activ</Chip> : <Chip tone="red">fără semnal</Chip>}
-              </span>
-            ) : (
-              <span className="text-slate-400">neînregistrat</span>
-            )
-          }
-        />
+        <Row k="GPS" v={<GpsState tr={tr} />} />
         <Row k="Încărcătură" v={`${load} kg / ${tr.capacityKg} kg`} />
         <Row k="Traseu" v={`${tr.totalKm} km · ${fmtTime(tr.departAt)}–${fmtTime(tr.returnAt)}`} />
         {next && st.status !== "done" && <Row k="Următoarea sosire" v={`${fmtTime(next.arriveAt)} (${fmtDur(next.arriveAt - t)})`} />}
@@ -103,21 +113,35 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
             </a>
           }
         />
+        {tr.leftover.count > 0 && (
+          <div className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800 ring-1 ring-amber-200">
+            {tr.leftover.count} {tr.leftover.count === 1 ? "comandă nu a încăput" : "comenzi nu au încăput"} (≈ {tr.leftover.kg} kg).
+          </div>
+        )}
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          <button onClick={() => printSheets([tr.id], "loading")} className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+            <Printer size={12} /> Foaie de încărcare
+          </button>
+          <button onClick={() => printSheets([tr.id], "route")} className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+            <Printer size={12} /> Foaie de parcurs
+          </button>
+        </div>
         <div className="mt-3 text-[11px] font-semibold text-slate-700">Opriri</div>
         <ol className="mt-1 space-y-1">
           {tr.stops.map((s, i) => {
             const inst = INSTITUTION_BY_ID.get(s.institutionId)!;
-            const ss = stopStatus(tr, i, t);
+            const ss = effectiveStatus(tr, i, t, confirmations);
             return (
               <li key={s.id}>
                 <button onClick={() => select({ kind: "institution", id: inst.id })} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-slate-50">
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-semibold ${ss === "delivered" ? "bg-emerald-500 text-white" : ss === "unloading" ? "bg-amber-400 text-white" : ss === "next" ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-500"}`}>{i + 1}</span>
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-semibold ${ss === "delivered" ? "bg-emerald-500 text-white" : ss === "problem" ? "bg-rose-500 text-white" : ss === "unloading" ? "bg-amber-400 text-white" : ss === "next" ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-500"}`}>{i + 1}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[11.5px] text-slate-800">{inst.name}</span>
                     <span className="block text-[10px] text-slate-400">
                       {inst.town} · {s.weightKg} kg
                     </span>
                   </span>
+                  <ConfirmMark orderNo={s.orderNo} />
                   <span className={`text-[10.5px] tabular-nums ${isOnTime(s) ? "text-slate-500" : "text-rose-600"}`}>{fmtTime(s.arriveAt)}</span>
                 </button>
               </li>
@@ -136,14 +160,27 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
       if (i >= 0) f = { tr, i };
     }
     const stop = f?.tr.stops[f.i];
-    const ss = f ? stopStatus(f.tr, f.i, t) : null;
+    const ss = f ? effectiveStatus(f.tr, f.i, t, confirmations) : null;
     return (
       <>
         <Header icon={<Building2 size={20} />} kicker={TYPE_LABEL[inst.type]} title={inst.name} sub={inst.town} />
+        {inst.address && <Row k="Adresa" v={inst.address} />}
+        {inst.phone && (
+          <Row
+            k="Telefon"
+            v={
+              <a href={`tel:${inst.phone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1 text-blue-600">
+                <Phone size={11} /> {inst.phone}
+              </a>
+            }
+          />
+        )}
+        {inst.code && <Row k="Cod 1C" v={inst.code} />}
+        {inst.precision === "town" && <div className="mb-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800 ring-1 ring-amber-200">Poziție aproximativă (centrul localității). Căutați adresa pe pagina Date.</div>}
         {f && stop ? (
           <>
             <div className="mb-2 flex items-center gap-2">
-              <Chip tone={ss === "delivered" ? "green" : ss === "unloading" ? "amber" : "blue"}>{ss === "delivered" ? "Livrat" : ss === "unloading" ? "Se descarcă acum" : ss === "next" ? "Mașina e pe drum" : "Planificat azi"}</Chip>
+              <Chip tone={ss === "delivered" ? "green" : ss === "problem" ? "red" : ss === "unloading" ? "amber" : "blue"}>{ss === "delivered" ? "Livrat" : ss === "problem" ? "Problemă la livrare" : ss === "unloading" ? "Se descarcă acum" : ss === "next" ? "Mașina e pe drum" : "Planificat azi"}</Chip>
               <span className="text-[11px] text-slate-500">{stop.orderNo}</span>
             </div>
             <Row
@@ -155,6 +192,7 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
               }
             />
             <Row k="Sosire planificată" v={fmtTime(stop.arriveAt)} />
+            <ConfirmRow orderNo={stop.orderNo} />
             <Row k="Termen" v={<span className={isOnTime(stop) ? "" : "text-rose-600"}>până la {fmtTime(inst.windowEnd)}</span>} />
             <Row k="Comandat" v={`acum ${stop.orderedDaysAgo} ${stop.orderedDaysAgo > 1 ? "zile" : "zi"} (telefon → 1C)`} />
             <Row
@@ -221,10 +259,11 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
       );
     }
     const items = PRODUCTS.filter((p) => p.zone === sel.id);
+    const demand = demandByProduct(trucks);
     return (
       <>
         <Header icon={<Package size={20} />} kicker="Zonă de depozitare" title={ZONE_LABEL[sel.id]} sub={`${items.length} produse`} />
-        <StockList items={items} />
+        <StockList items={items} demand={demand} />
       </>
     );
   }
@@ -241,11 +280,13 @@ function Body({ sel }: { sel: NonNullable<Selection> }) {
   );
 }
 
-export function StockList({ items }: { items: typeof PRODUCTS }) {
+export function StockList({ items, demand }: { items: typeof PRODUCTS; demand?: Map<string, number> }) {
   return (
     <ul className="divide-y divide-slate-100">
       {items.map((p) => {
         const low = p.stock < p.min;
+        const need = demand?.get(p.id) ?? 0;
+        const short = need > p.stock;
         return (
           <li key={p.id} className="py-1.5">
             <div className="flex items-center gap-2 text-[11.5px]">
@@ -254,12 +295,45 @@ export function StockList({ items }: { items: typeof PRODUCTS }) {
               <span className="tabular-nums text-slate-800">
                 {p.stock.toLocaleString("ro-MD")} {p.unit === "pcs" ? "buc" : p.unit}
               </span>
-              <Chip tone={low ? "amber" : "green"}>{low ? "Redus" : "OK"}</Chip>
+              <Chip tone={short ? "red" : low ? "amber" : "green"}>{short ? "Lipsă" : low ? "Redus" : "OK"}</Chip>
             </div>
+            {need > 0 && (
+              <div className={`ml-5 text-[10px] ${short ? "font-medium text-rose-600" : "text-slate-400"}`}>
+                necesar azi {need.toLocaleString("ro-MD")} {p.unit === "pcs" ? "buc" : p.unit}
+                {short && ` · lipsesc ${(need - p.stock).toLocaleString("ro-MD")}`}
+              </div>
+            )}
             <Bar value={p.stock / (p.min * 3)} tone={low ? "amber" : "blue"} className="ml-5 mt-1" />
           </li>
         );
       })}
     </ul>
   );
+}
+
+function GpsState({ tr }: { tr: Truck }) {
+  const fix = useUi((s) => liveFix(s.live, tr));
+  if (!tr.trackerId && !fix) return <span className="text-slate-400">neînregistrat</span>;
+  const age = fix ? Math.round((Date.now() - fix.ts) / 60000) : null;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {tr.trackerId && <span className="text-slate-400">tracker {tr.trackerId}</span>}
+      {fix && age !== null && age < 15 ? (
+        <Chip tone="green">{fix.source === "phone" ? "telefon" : "live"} · {age < 1 ? "acum" : `${age} min`}</Chip>
+      ) : fix ? (
+        <Chip tone="amber">ultima {hhmm(fix.ts)}</Chip>
+      ) : tr.gpsOk ? (
+        <Chip tone="gray">fără date încă</Chip>
+      ) : (
+        <Chip tone="red">fără semnal</Chip>
+      )}
+    </span>
+  );
+}
+
+function ConfirmRow({ orderNo }: { orderNo: string }) {
+  const c = useUi((s) => s.confirmations[orderNo]);
+  if (!c) return <Row k="Confirmare șofer" v={<span className="text-slate-400">încă nu</span>} />;
+  const label = c.status === "delivered" ? "Livrat" : c.status === "arrived" ? "A ajuns" : `Problemă${c.reason ? `: ${c.reason}` : ""}`;
+  return <Row k="Confirmare șofer" v={<Chip tone={c.status === "problem" ? "red" : c.status === "delivered" ? "green" : "blue"}>{`${label} · ${hhmm(c.ts)}`}</Chip>} />;
 }

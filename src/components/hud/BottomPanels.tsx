@@ -1,7 +1,8 @@
 "use client";
 
 import { Check, ChevronRight, ClipboardList, Minus, PackageCheck, PackageOpen, Phone, Plus, Truck as TruckIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { demandByProduct } from "@/lib/alerts";
 import { DOCK_COUNT, INSTITUTION_BY_ID, MAX_TRUCKS, PIPELINE, PRODUCTS } from "@/lib/seed";
 import { STATUS_LABEL, STATUS_TONE, fmtTime, truckState } from "@/lib/sim";
 import { useMinute, useTrucks, useUi } from "@/lib/store";
@@ -76,9 +77,12 @@ export function FleetPanel() {
   const [tab, setTab] = useState<Tab>("trucks");
   const t = useMinute();
   const trucks = useTrucks();
-  const setTruckCount = useUi((s) => s.setTruckCount);
+  const addTruck = useUi((s) => s.addTruck);
+  const removeLastTruck = useUi((s) => s.removeLastTruck);
+  const fleetSize = useUi((s) => s.fleet.length);
   const select = useUi((s) => s.select);
-  const low = PRODUCTS.filter((p) => p.stock < p.min).length;
+  const demand = useMemo(() => demandByProduct(trucks), [trucks]);
+  const low = PRODUCTS.filter((p) => p.stock < p.min || (demand.get(p.id) ?? 0) > p.stock).length;
   const tabs: [Tab, string][] = [
     ["trucks", `Mașini ${trucks.length}`],
     ["docks", `Rampe ${DOCK_COUNT}`],
@@ -125,10 +129,10 @@ export function FleetPanel() {
             <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-1.5 pb-1 pt-2">
               <span className="text-[10.5px] text-slate-400">Traseele se replanifică automat.</span>
               <span className="flex gap-1">
-                <button disabled={trucks.length <= 1} onClick={() => setTruckCount(trucks.length - 1)} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                <button disabled={fleetSize <= 1} onClick={removeLastTruck} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-40">
                   <Minus size={12} /> Elimină
                 </button>
-                <button disabled={trucks.length >= MAX_TRUCKS} onClick={() => setTruckCount(trucks.length + 1)} className="flex items-center gap-1 rounded-lg bg-blue-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-40">
+                <button disabled={fleetSize >= MAX_TRUCKS} onClick={addTruck} className="flex items-center gap-1 rounded-lg bg-blue-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-40">
                   <Plus size={12} /> Adaugă mașină
                 </button>
               </span>
@@ -154,7 +158,7 @@ export function FleetPanel() {
               </button>
             );
           })}
-        {tab === "stock" && <StockList items={[...PRODUCTS].sort((a, b) => a.stock / a.min - b.stock / b.min)} />}
+        {tab === "stock" && <StockList demand={demand} items={[...PRODUCTS].sort((a, b) => (demand.get(b.id) ?? 0) / b.stock - (demand.get(a.id) ?? 0) / a.stock || a.stock / a.min - b.stock / b.min)} />}
         {tab === "orders" && (
           <div className="py-1">
             <p className="px-1.5 pb-2 text-[11px] text-slate-500">Comenzi primite la telefon și introduse în 1C, livrate peste 1–3 zile.</p>

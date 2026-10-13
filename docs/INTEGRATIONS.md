@@ -64,7 +64,9 @@ connector that polls the provider's API, sends one position or a list:
 - Also accepted: `id`/`imei` for the tracker, `latitude`/`longitude`/`lon`, and `course` for heading. `ts` can be ISO text or epoch seconds/ms.
 - The **Date** page → *GPS în timp real* → **Live GPS** shows each truck at its latest fix (green ring); fixes older than 15 min are ignored.
 - Test without the provider: `node scripts/gps-test-sender.mjs http://localhost:3000`.
-- Positions are kept in memory (latest per tracker) for now. History needs the database (next step).
+- The latest position per tracker is kept in `data/gps-latest.json`. Every position is kept in `data/gps/<day>.ndjson`.
+  `GET /api/gps?tracker=059166&day=2026-10-13` returns a tracker's track for a day.
+- Drivers' phones can send positions too (Șofer page → *Trimite poziția din telefon*). They are stored under the truck's tracker ID.
 
 **What we need:** the GPS provider's name and contact, the tracker model, and whether they offer an API or
 retransmission.
@@ -84,7 +86,7 @@ retransmission.
 The **Date** page imports the institutions list from an `.xlsx` or `.csv` export (a template can be downloaded there).
 Columns are recognised by name (Romanian/Russian/English) and can be corrected. Rows with coordinates are placed exactly;
 the rest are placed at their town centre, and **Caută adresele** looks the addresses up in OpenStreetMap (1 per second).
-The imported list is saved in the browser and the demo routes are rebuilt on it. The warehouse location can be set
+The imported list is saved on the server (`data/institutions.json`) for all office computers, and the demo routes are rebuilt on it. The warehouse location can be set
 there too (coordinates or a full Google Maps link).
 
 ### What we import

@@ -1,13 +1,16 @@
 "use client";
 
-import { Bell, CalendarRange, Database, ListChecks, Map as MapIcon, Pause, Play, Search, Warehouse } from "lucide-react";
+import { Bell, CalendarRange, Database, ListChecks, Map as MapIcon, Pause, Play, Search, TriangleAlert, Warehouse } from "lucide-react";
+import { computeAlerts, type Severity } from "@/lib/alerts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { eventsUntil, type EventKind } from "@/lib/events";
 import { INSTITUTIONS } from "@/lib/seed";
 import { fmtTime } from "@/lib/sim";
-import { DAY_END, DAY_START, useMinute, useTrucks, useUi } from "@/lib/store";
+import { DAY_END, DAY_START, liveFix, useMinute, useTrucks, useUi } from "@/lib/store";
 
-const SPEEDS = [1, 3, 10, 30];
+const SPEEDS = [3, 10, 30];
+const today = () => new Date().toLocaleDateString("ro-MD", { weekday: "short", day: "2-digit", month: "2-digit" });
+const todayLong = () => new Date().toLocaleDateString("ro-MD", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 export function TopBar() {
   const view = useUi((s) => s.view);
@@ -45,8 +48,8 @@ export function TopBar() {
         ))}
       </div>
       <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1">
-        <span className="flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> {fmtTime(t)}
+        <span title={todayLong()} className="flex items-center gap-1 whitespace-nowrap rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> <span className="hidden font-normal text-emerald-700/80 2xl:inline">{today()}</span> {fmtTime(t)}
         </span>
         <button aria-label={playing ? "Pauză" : "Pornește"} onClick={() => setPlaying(!playing)} className="grid h-6 w-6 place-items-center rounded-md text-slate-600 hover:bg-slate-100">
           {playing ? <Pause size={13} /> : <Play size={13} />}
@@ -63,13 +66,17 @@ export function TopBar() {
           style={{ ["--p" as string]: `${((t - DAY_START) / (DAY_END - DAY_START)) * 100}%` }}
         />
         <div className="hidden items-center md:flex">
+          <button onClick={() => useUi.getState().goLive()} title="Ora reală, în timp real" className={`rounded px-1.5 text-[11px] ${speed === 1 ? "font-semibold text-blue-700" : "text-slate-400 hover:text-slate-700"}`}>
+            Acum
+          </button>
           {SPEEDS.map((s) => (
             <button key={s} onClick={() => setSpeed(s)} className={`rounded px-1.5 text-[11px] ${speed === s ? "font-semibold text-blue-700" : "text-slate-400 hover:text-slate-700"}`}>
-              {s === 1 ? "1×" : `${s * 60}×`}
+              {`${s * 60}×`}
             </button>
           ))}
         </div>
       </div>
+      <AlertsButton />
       <ActivityBell />
       <LiveBadge />
       <span className="hidden whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200 lg:inline">Date demo</span>
@@ -192,10 +199,69 @@ function LiveBadge() {
   const trucks = useTrucks();
   if (gpsMode !== "live") return null;
   const now = Date.now();
-  const n = trucks.filter((t) => t.trackerId && live[t.trackerId] && now - live[t.trackerId].ts < 15 * 60_000).length;
+  const n = trucks.filter((t) => {
+    const f = liveFix(live, t);
+    return f && now - f.ts < 15 * 60_000;
+  }).length;
   return (
     <span className="hidden items-center gap-1 whitespace-nowrap rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200 lg:inline-flex">
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> GPS live · {n}/{trucks.length}
     </span>
+  );
+}
+
+const SEV_STYLE: Record<Severity, string> = { high: "bg-rose-500", medium: "bg-amber-400", info: "bg-sky-400" };
+
+/** What needs the dispatcher's attention today (late deliveries, cold chain, stock, GPS, driver problems). */
+function AlertsButton() {
+  const [open, setOpen] = useState(false);
+  const t = useMinute();
+  const trucks = useTrucks();
+  const gpsMode = useUi((s) => s.gpsMode);
+  const live = useUi((s) => s.live);
+  const confirmations = useUi((s) => s.confirmations);
+  const select = useUi((s) => s.select);
+  const alerts = useMemo(() => computeAlerts(trucks, t, { gpsMode, live, confirmations, now: Date.now() }), [trucks, t, gpsMode, live, confirmations]);
+  const high = alerts.filter((a) => a.severity === "high").length;
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+  return (
+    <div ref={box} className="relative">
+      <button aria-label="Alerte" title="Alerte" onClick={() => setOpen(!open)} className={`relative flex h-9 items-center gap-1 rounded-xl border px-2 text-[12px] font-semibold transition ${high ? "border-rose-200 bg-rose-50 text-rose-700" : alerts.length ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-white text-slate-500"} ${open ? "ring-2 ring-blue-100" : ""}`}>
+        <TriangleAlert size={14} /> {alerts.length}
+      </button>
+      {open && (
+        <div className="panel-in absolute right-0 top-11 z-50 w-[380px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+          <div className="border-b border-slate-100 px-3 py-2 text-[12px] font-semibold text-slate-800">
+            Alerte azi <span className="font-normal text-slate-400">· {high} importante</span>
+          </div>
+          <ul className="max-h-[440px] overflow-y-auto py-1">
+            {alerts.length === 0 && <li className="px-3 py-4 text-center text-[12px] text-slate-400">Totul este în regulă.</li>}
+            {alerts.map((a) => (
+              <li key={a.id}>
+                <button
+                  onClick={() => {
+                    if (a.select) select(a.select);
+                    setOpen(false);
+                  }}
+                  className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-slate-50"
+                >
+                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${SEV_STYLE[a.severity]}`} />
+                  <span className="flex-1">
+                    <span className="block text-[12px] font-medium text-slate-800">{a.title}</span>
+                    <span className="block text-[11px] leading-snug text-slate-500">{a.detail}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

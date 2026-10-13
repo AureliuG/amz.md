@@ -517,6 +517,7 @@ function CameraRig() {
 export default function WarehouseScene() {
   const select = useUi((s) => s.select);
   const active = useUi((s) => s.view === "warehouse");
+  const lowGfx = useUi((s) => s.lowGfx);
   const trucks = useUi((s) => s.trucks);
   const right = fenceRight(trucks.length);
   const trees = useMemo(() => {
@@ -526,7 +527,7 @@ export default function WarehouseScene() {
     return out.filter(([x, z]) => !(Math.abs(x - GATE_X - 2) < 9 && z > 30) && !(Math.abs(x) < 9 && z < -30));
   }, [right]);
   return (
-    <Canvas shadows flat dpr={[1, 2]} frameloop={active ? "always" : "never"} onPointerMissed={() => select(null)}>
+    <Canvas key={lowGfx ? "low" : "high"} shadows={!lowGfx} flat dpr={lowGfx ? 1 : [1, 2]} frameloop={active ? "always" : "never"} onPointerMissed={() => select(null)}>
       <OrthographicCamera makeDefault position={[95, 90, 115]} zoom={HOME_ZOOM} near={-500} far={1000} />
       <MapControls makeDefault target={[5, 0, 2]} enableDamping maxPolarAngle={1.2} minZoom={3} maxZoom={30} />
       <CameraRig />

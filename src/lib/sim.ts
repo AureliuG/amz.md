@@ -4,7 +4,7 @@
  */
 import { arcPoint, bearingDeg } from "./geo";
 import { INSTITUTION_BY_ID, WAREHOUSE } from "./seed";
-import type { LngLat, Stop, StopStatus, Truck, TruckState } from "./types";
+import type { Confirmation, LngLat, Stop, StopStatus, Truck, TruckState } from "./types";
 
 /** Minutes a truck spends crossing the yard between dock and gate. */
 export const YARD_MIN = 4;
@@ -54,9 +54,19 @@ export function stopStatus(truck: Truck, idx: number, t: number): StopStatus {
   return t >= prevLeave ? "next" : "planned";
 }
 
+export type EffectiveStatus = StopStatus | "problem";
+
+/** A driver's report wins over the plan/simulation: "Livrat" = delivered, "Problemă" = problem. */
+export function effectiveStatus(truck: Truck, idx: number, t: number, conf?: Record<string, Confirmation>): EffectiveStatus {
+  const c = conf?.[truck.stops[idx].orderNo];
+  if (c?.status === "delivered") return "delivered";
+  if (c?.status === "problem") return "problem";
+  return stopStatus(truck, idx, t);
+}
+
 export const isOnTime = (s: Stop) => s.arriveAt <= INSTITUTION_BY_ID.get(s.institutionId)!.windowEnd;
 
-export function fleetSummary(trucks: Truck[], t: number) {
+export function fleetSummary(trucks: Truck[], t: number, conf?: Record<string, Confirmation>) {
   let delivered = 0;
   let planned = 0;
   let onTime = 0;
@@ -69,7 +79,7 @@ export function fleetSummary(trucks: Truck[], t: number) {
     else atWarehouse++;
     tr.stops.forEach((s) => {
       planned++;
-      if (t >= s.leaveAt) {
+      if (t >= s.leaveAt || conf?.[s.orderNo]?.status === "delivered") {
         delivered++;
         kgDelivered += s.weightKg;
         if (isOnTime(s)) onTime++;

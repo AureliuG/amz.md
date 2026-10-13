@@ -5,26 +5,15 @@
  * POST /api/gps   body: one position or an array of positions
  *   { "tracker": "059166", "lat": 47.02, "lng": 28.83, "ts": "2026-10-12T08:15:00Z", "speed": 42, "heading": 180 }
  *   If GPS_INGEST_TOKEN is set, send header  Authorization: Bearer <token>
- * GET  /api/gps   → { positions: { [tracker]: { lat, lng, ts, speed, heading } } }
- *
- * Positions are kept in memory (latest per tracker). History and persistence come with the database.
+ * GET  /api/gps                      → { positions: { [tracker]: { lat, lng, ts, speed, heading } } }
+ * GET  /api/gps?tracker=059166&day=2026-10-13 → { points: [...] }  (that tracker's track for the day)
  */
 import { NextResponse } from "next/server";
+import { dayOf, isDay, readLog } from "@/lib/server/db";
+import { ingest, latestAll } from "@/lib/server/gps";
 
 export const dynamic = "force-dynamic";
-
-interface Pos {
-  lat: number;
-  lng: number;
-  ts: number;
-  speed?: number;
-  heading?: number;
-}
-
-const g = globalThis as unknown as { __gpsLatest?: Map<string, Pos> };
-const latest = (g.__gpsLatest ??= new Map<string, Pos>());
-
-const n = (v: unknown) => (typeof v === "string" ? Number(v.replace(",", ".")) : typeof v === "number" ? v : NaN);
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   const token = process.env.GPS_INGEST_TOKEN;
@@ -38,25 +27,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
   const items = (Array.isArray(body) ? body : [body]) as Record<string, unknown>[];
-  let accepted = 0;
-  const rejected: number[] = [];
-  items.slice(0, 5000).forEach((it, i) => {
-    const tracker = String(it.tracker ?? it.id ?? it.imei ?? "").trim();
-    const lat = n(it.lat ?? it.latitude);
-    const lng = n(it.lng ?? it.lon ?? it.longitude);
-    const ts = it.ts ? new Date(typeof it.ts === "number" && it.ts < 1e12 ? it.ts * 1000 : (it.ts as string | number)).getTime() : Date.now();
-    if (!tracker || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || !Number.isFinite(ts)) {
-      rejected.push(i);
-      return;
-    }
-    const prev = latest.get(tracker);
-    if (prev && prev.ts > ts) return; // keep the newest
-    latest.set(tracker, { lat, lng, ts, speed: Number.isFinite(n(it.speed)) ? n(it.speed) : undefined, heading: Number.isFinite(n(it.heading ?? it.course)) ? n(it.heading ?? it.course) : undefined });
-    accepted++;
-  });
-  return NextResponse.json({ accepted, rejected });
+  return NextResponse.json(await ingest(items, "tracker"));
 }
 
-export async function GET() {
-  return NextResponse.json({ positions: Object.fromEntries(latest), serverTime: Date.now() }, { headers: { "Cache-Control": "no-store" } });
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const tracker = url.searchParams.get("tracker");
+  if (tracker) {
+    const day = isDay(url.searchParams.get("day")) ? url.searchParams.get("day")! : dayOf();
+    const points = (await readLog<{ tracker: string; lat: number; lng: number; ts: number }>("gps", day)).filter((p) => p.tracker === tracker);
+    return NextResponse.json({ tracker, day, points }, { headers: { "Cache-Control": "no-store" } });
+  }
+  return NextResponse.json({ positions: await latestAll(), serverTime: Date.now() }, { headers: { "Cache-Control": "no-store" } });
 }

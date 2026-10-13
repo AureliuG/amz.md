@@ -172,3 +172,104 @@ body {
 .truck-marker.is-live .truck-dot {
   box-shadow: 0 0 0 3px #fff, 0 0 0 6px rgba(16, 185, 129, 0.55), 0 4px 12px -2px rgba(15, 23, 42, 0.35);
 }
+
+/* ---------- Printed sheets (foaie de încărcare / de parcurs) ---------- */
+#print-root {
+  display: none;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  #app-root {
+    display: none !important;
+  }
+  #print-root {
+    display: block;
+    color: #000;
+    font: 10.5pt/1.35 Inter, Arial, sans-serif;
+  }
+}
+.ps-page {
+  break-after: page;
+}
+/* The route sheet has many columns: print it in landscape. */
+.ps-page.ps-landscape {
+  page: landscape;
+}
+@page landscape {
+  size: A4 landscape;
+  margin: 10mm;
+}
+.ps-page:last-child {
+  break-after: auto;
+}
+.ps-brand {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9.5pt;
+  border-bottom: 2px solid #1f3fb3;
+  padding-bottom: 3pt;
+}
+.ps-brand b {
+  color: #1f3fb3;
+  letter-spacing: 0.08em;
+}
+.ps-page h1 {
+  font-size: 16pt;
+  margin: 8pt 0 4pt;
+  text-transform: uppercase;
+}
+.ps-page h2 {
+  font-size: 11pt;
+  margin: 10pt 0 3pt;
+}
+.ps-meta {
+  width: 100%;
+  font-size: 9.5pt;
+  margin-bottom: 4pt;
+}
+.ps-meta td {
+  padding: 1pt 4pt 1pt 0;
+}
+.ps-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.ps-table th,
+.ps-table td {
+  border: 0.6pt solid #888;
+  padding: 2.5pt 4pt;
+  text-align: left;
+  vertical-align: top;
+}
+.ps-table th {
+  background: #eef2fb;
+  font-size: 9pt;
+}
+.ps-table tr {
+  break-inside: avoid;
+}
+.ps-table .r {
+  text-align: right;
+}
+.ps-table .c {
+  text-align: center;
+}
+.ps-table .small {
+  font-size: 8.5pt;
+}
+.ps-sign {
+  display: flex;
+  justify-content: space-between;
+  gap: 12pt;
+  margin-top: 14pt;
+  font-size: 9.5pt;
+}

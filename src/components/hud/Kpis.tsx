@@ -3,13 +3,14 @@
 import { CheckCircle2, Clock, PackageX, Truck } from "lucide-react";
 import { PRODUCTS } from "@/lib/seed";
 import { fleetSummary } from "@/lib/sim";
-import { useMinute, useTrucks } from "@/lib/store";
+import { useMinute, useTrucks, useUi } from "@/lib/store";
 import { Card } from "./ui";
 
 export function Kpis() {
   const t = useMinute();
   const trucks = useTrucks();
-  const f = fleetSummary(trucks, t);
+  const confirmations = useUi((s) => s.confirmations);
+  const f = fleetSummary(trucks, t, confirmations);
   const low = PRODUCTS.filter((p) => p.stock < p.min).length;
   const items = [
     { icon: CheckCircle2, label: "Livrate azi", value: `${f.delivered}`, sub: `din ${f.planned} opriri · ${(f.kgDelivered / 1000).toFixed(1)} t` },

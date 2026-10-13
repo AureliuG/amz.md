@@ -1,38 +1,59 @@
 "use client";
 
-import { ArrowUpDown, MapPin, Search } from "lucide-react";
+import { ArrowUpDown, Download, MapPin, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { INSTITUTION_BY_ID } from "@/lib/seed";
-import { fmtTime, isOnTime, stopStatus } from "@/lib/sim";
+import { effectiveStatus, fmtTime, isOnTime, type EffectiveStatus } from "@/lib/sim";
 import { useMinute, useTrucks, useUi } from "@/lib/store";
-import type { InstitutionType, StopStatus } from "@/lib/types";
+import type { Confirmation, InstitutionType } from "@/lib/types";
 import { TruckBadge } from "./hud/DetailPanel";
 import { Kpis } from "./hud/Kpis";
 import { Card, Chip, type Tone } from "./hud/ui";
 
 const TYPE_LABEL: Record<InstitutionType, string> = { kindergarten: "Grădiniță", school: "Școală", hospital: "Spital", prison: "Penitenciar", social: "Asistență socială" };
-const STATUS: Record<StopStatus, [string, Tone]> = {
+const STATUS: Record<EffectiveStatus, [string, Tone]> = {
+  problem: ["Problemă", "red"],
   planned: ["Planificat", "gray"],
   next: ["Mașina e pe drum", "blue"],
   unloading: ["Se descarcă", "amber"],
   delivered: ["Livrat", "green"],
 };
-type Filter = "all" | StopStatus | "late";
+type Filter = "all" | EffectiveStatus | "late";
 const FILTERS: [Filter, string][] = [
   ["all", "Toate"],
   ["planned", "Planificate"],
   ["next", "Pe drum"],
   ["unloading", "Se descarcă"],
   ["delivered", "Livrate"],
+  ["problem", "Probleme"],
   ["late", "După 18:00"],
 ];
 type SortKey = "eta" | "truck" | "town" | "kg";
+
+const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("ro-MD", { hour: "2-digit", minute: "2-digit" });
+
+/** CSV with ";" and a BOM, so Excel in Romanian/Russian locale opens it with the right columns and diacritics. */
+function exportCsv(rows: { tr: { label: string; plate: string }; s: { arriveAt: number; weightKg: number; orderNo: string }; i: number; inst: { name: string; town: string; type: InstitutionType; address?: string }; status: EffectiveStatus; late: boolean }[], conf: Record<string, Confirmation>) {
+  const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  const head = ["Sosire plan", "Instituția", "Tip", "Localitatea", "Adresa", "Mașina", "Nr. înmatriculare", "Ordinea", "Greutate kg", "Comanda", "Starea", "Confirmare șofer", "După 18:00"];
+  const lines = rows.map(({ tr, s, i, inst, status, late }) => {
+    const c = conf[s.orderNo];
+    return [fmtTime(s.arriveAt), inst.name, TYPE_LABEL[inst.type], inst.town, inst.address ?? "", tr.label, tr.plate, i + 1, s.weightKg, s.orderNo, STATUS[status][0], c ? `${c.status === "problem" ? `Problemă ${c.reason ?? ""}` : c.status === "delivered" ? "Livrat" : "A ajuns"} ${hhmm(c.ts)}` : "", late ? "da" : ""].map(esc).join(";");
+  });
+  const blob = new Blob(["\ufeff" + [head.map(esc).join(";"), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `livrari-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 
 /** Every delivery of the day in one table, filterable by status, truck and text. */
 export function DeliveriesView() {
   const t = useMinute();
   const trucks = useTrucks();
   const select = useUi((s) => s.select);
+  const confirmations = useUi((s) => s.confirmations);
   const setView = useUi((s) => s.setView);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -44,14 +65,14 @@ export function DeliveriesView() {
       trucks.flatMap((tr) =>
         tr.stops.map((s, i) => {
           const inst = INSTITUTION_BY_ID.get(s.institutionId)!;
-          return { tr, s, i, inst, status: stopStatus(tr, i, t), late: !isOnTime(s) };
+          return { tr, s, i, inst, status: effectiveStatus(tr, i, t, confirmations), late: !isOnTime(s) };
         }),
       ),
-    [trucks, t],
+    [trucks, t, confirmations],
   );
 
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { all: rows.length, planned: 0, next: 0, unloading: 0, delivered: 0, late: 0 };
+    const c: Record<Filter, number> = { all: rows.length, planned: 0, next: 0, unloading: 0, delivered: 0, problem: 0, late: 0 };
     rows.forEach((r) => {
       c[r.status]++;
       if (r.late) c.late++;
@@ -97,10 +118,13 @@ export function DeliveriesView() {
               <option value="">Toate mașinile</option>
               {trucks.map((tr) => (
                 <option key={tr.id} value={tr.id}>
-                  {tr.label} · {tr.region}
+                  {tr.label} {tr.plate && `(${tr.plate})`} · {tr.region}
                 </option>
               ))}
             </select>
+            <button onClick={() => exportCsv(shown, confirmations)} title="Descarcă lista afișată pentru Excel" className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+              <Download size={13} /> Excel (CSV)
+            </button>
           </div>
           <div className="flex flex-wrap gap-1 border-b border-slate-100 px-3 py-2">
             {FILTERS.map(([k, label]) => (
@@ -152,7 +176,14 @@ export function DeliveriesView() {
                     <td className="px-3 py-2 text-right tabular-nums text-slate-600">{s.weightKg} kg</td>
                     <td className="px-3 py-2 text-[11px] text-slate-500">{s.orderNo}</td>
                     <td className="px-3 py-2">
-                      <Chip tone={STATUS[status][1]}>{STATUS[status][0]}</Chip>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Chip tone={STATUS[status][1]}>{STATUS[status][0]}</Chip>
+                        {confirmations[s.orderNo] && (
+                          <Chip tone={confirmations[s.orderNo].status === "problem" ? "red" : "green"}>
+                            {confirmations[s.orderNo].status === "problem" ? (confirmations[s.orderNo].reason ?? "raportat") : confirmations[s.orderNo].status === "delivered" ? "✔ confirmat" : "a ajuns"} {hhmm(confirmations[s.orderNo].ts)}
+                          </Chip>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-right">
                       <button

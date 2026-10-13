@@ -1,43 +1,65 @@
 # Nobil Prest · Depozit & livrări
 
 A warehouse and delivery dashboard (UI in Romanian) for institutional food supply (kindergartens, schools,
-hospitals, penitentiaries, social care) across Moldova. It has two views:
+hospitals, penitentiaries, social care) across Moldova, plus a phone page for drivers.
 
-- **Warehouse (3D):** the main warehouse with the front entrance and 6 docks, the rarely used back
-  entrance, the office, dry goods racks, the cold room and the underground vegetable & fruit depot.
-  Trucks load at the docks, forklifts shuttle pallets, and trucks leave and return through the main gate.
-  Use 👁 to look inside.
-- **Moldova:** numbered trucks (Mașina 1–12, more can be added from the Mașini tab), about 800 institutions,
-  live truck positions and delivery status (due by 18:00).
+## Office (dashboard, `/`)
 
-- **Livrări:** every delivery of the day in one table, with search, status/truck filters and sorting.
-- **Activitate (🔔):** a live feed of loadings, departures, arrivals and deliveries.
-- **Program:** the day as a timeline, one row per truck (loading, driving, unloading, return) with a "now" line.
-- **Shortcuts:** 1–5 switch pages, space plays/pauses, Esc closes details. The 3D light follows the time of day.
-- **Date:** set the warehouse location, import institutions from Excel/CSV (1C export), and switch the map to **Live GPS**
-  (positions arrive at `POST /api/gps`; see docs/INTEGRATIONS.md).
-- **Time slider** in the top bar to scrub through the day; Esc closes the detail panel.
+| Page (key) | What |
+|---|---|
+| **Depozit** (1) | 3D warehouse: 6 front docks, rarely used back entrance, office, dry racks, cold room, underground vegetable & fruit depot. Trucks drive in, back into docks, load and leave. 👁 looks inside. Light follows the time of day. |
+| **Moldova** (2) | Truck routes and institutions on a map of Moldova. Trails show what was driven. **Live GPS** shows real positions. |
+| **Livrări** (3) | Every delivery of the day: search, filters (incl. *Probleme*, *După 18:00*), sorting, driver confirmations, **Excel (CSV) export**. |
+| **Program** (4) | The day as a timeline per truck, with a "now" line and the 18:00 deadline. **Print all loading / route sheets.** |
+| **Date** (5) | Warehouse location, **fleet cards** (plate, tracker, model, capacity, refrigerated, driver, phone, fixed/daily route, active), institution import from Excel/CSV (1C export), live GPS status, simplified graphics. |
 
-Everything currently runs on **generated demo data** and a simulated clock (play/pause and speed
-controls in the top bar). See [`docs/PLAN.md`](docs/PLAN.md) for the roadmap: 1C import,
-real road routing, and a driver app with GPS.
+Also:
+- **Alerte (⚠):** deliveries after 18:00, orders that don't fit a truck, chilled products on a non-refrigerated truck, missing GPS, stock that can't cover today, low stock, problems reported by drivers.
+- **Activitate (🔔):** loadings, departures, arrivals, deliveries.
+- **Printed sheets** per truck: *foaie de încărcare* (picking by storage zone and loading order) and *foaie de parcurs* (stops, invoice/odometer/fuel lines).
+- **Acum** jumps to the real time; space plays/pauses; Esc closes details. If the PC has no WebGL, the 3D and map views show a notice and the rest keeps working.
+
+## Drivers (`/sofer`, phones)
+
+Pick the truck once, then see today's stops in order. Each stop has:
+- **Maps / Waze** navigation;
+- **Sună** to call the institution;
+- **Am ajuns / Livrat / Problemă** (with a reason).
+
+Taps made without signal are queued and sent later. **Trimite poziția din telefon** shares GPS for trucks whose tracker doesn't work.
+
+## Data
+
+Orders, routes and stock are still **generated demo data** until 1C is connected. Real today:
+- the 16 vehicles (plates and trackers from the GPS client);
+- imported institutions;
+- the warehouse location;
+- GPS positions;
+- driver confirmations.
+
+All of these are stored on the server in `data/` (see [`docs/DEPLOY.md`](docs/DEPLOY.md)).
+Integrations: [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md). Roadmap: [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Run
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
-npm run build && npm start
+npm run dev                       # http://localhost:3000 (no passwords)
+npm run build && npm start        # production; set passwords in .env.local (see .env.example)
+node scripts/gps-test-sender.mjs  # fake GPS positions for testing Live GPS
 ```
 
 ## Code map
 
 | Path | What |
 |---|---|
-| `src/lib/seed.ts` | Demo data: institutions, products/stock, `buildFleet(n)` for today's routes, warehouse location. Replaced by the 1C import later. |
-| `src/lib/events.ts` | The day's activity feed, derived from the plan and the clock. |
-| `src/lib/sim.ts` | Derives truck/stop status from the plan and the clock (pure functions). |
-| `src/lib/store.ts` | UI state (view, clock, selection) and the fleet (size saved in the browser). |
-| `src/components/scene/` | React Three Fiber warehouse scene and low-poly models. |
-| `src/components/map/` | MapLibre map of Moldova (works offline; adds OpenStreetMap roads when reachable). |
-| `src/components/hud/` | Top bar, KPI cards, detail panel, tracking and fleet panels. |
+| `src/lib/seed.ts` | Demo data and the planner: institutions, products/stock, real fleet, `buildFleet(fleetCards)`. |
+| `src/lib/sim.ts` | Truck/stop status from the plan and the clock; driver confirmations override it. |
+| `src/lib/alerts.ts` | Alert rules and today's demand per product. |
+| `src/lib/store.ts` | UI state, fleet, shared data loading/saving, live GPS, confirmations. |
+| `src/lib/importer.ts` | Excel/CSV import, column recognition, geocoding, Google Maps link parsing. |
+| `src/lib/server/` | File storage (`data/`) and GPS intake used by the API routes. |
+| `src/app/api/` | `state` (shared data), `gps` (positions), `driver/position` (phone GPS), `events` (confirmations). |
+| `src/app/sofer/` | Driver phone page. |
+| `src/middleware.ts` | Office/driver passwords. |
+| `src/components/` | Dashboard pages, 3D scene, map, panels, printed sheets. |

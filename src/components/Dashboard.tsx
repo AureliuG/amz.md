@@ -2,12 +2,13 @@
 
 import { Eye, EyeOff, Minus, Plus, RotateCcw } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
-import { DAY_END, useUi } from "@/lib/store";
+import { Component, useEffect, useState, type ReactNode } from "react";
+import { DAY_END, initialLowGfx, useUi } from "@/lib/store";
 import { FleetPanel, TrackingPanel } from "./hud/BottomPanels";
 import { DeliveriesView } from "./DeliveriesView";
 import { DataView } from "./DataView";
 import { PlanningView } from "./PlanningView";
+import { PrintRoot } from "./PrintSheets";
 import { DetailPanel } from "./hud/DetailPanel";
 import { Kpis } from "./hud/Kpis";
 import { TopBar } from "./hud/TopBar";
@@ -72,6 +73,71 @@ function ViewControls() {
   );
 }
 
+/** Is WebGL available? Old office PCs or remote desktops sometimes lack it; the 3D and map views need it. */
+function hasWebGL() {
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+function NoGraphics({ what }: { what: string }) {
+  const setView = useUi((s) => s.setView);
+  return (
+    <div className="grid h-full place-items-center bg-[#eef2fb] p-6">
+      <div className="max-w-md rounded-2xl bg-white p-5 text-center shadow-sm ring-1 ring-slate-200">
+        <div className="text-[14px] font-semibold text-slate-900">{what} nu poate fi afișat pe acest calculator</div>
+        <p className="mt-1 text-[12.5px] text-slate-500">Browserul nu are accelerare grafică (WebGL). Actualizați Chrome/Edge sau driverul plăcii video. Restul aplicației funcționează normal.</p>
+        <div className="mt-3 flex justify-center gap-2">
+          <button className="rounded-lg bg-blue-600 px-3 py-1.5 text-[12px] font-medium text-white" onClick={() => setView("deliveries")}>
+            Deschide Livrări
+          </button>
+          <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-slate-700" onClick={() => setView("planning")}>
+            Program
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** If a 3D/map view crashes, show a message instead of a blank page. */
+class ViewBoundary extends Component<{ what: string; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(err: unknown) {
+    console.error(err);
+  }
+  render() {
+    return this.state.failed ? <NoGraphics what={this.props.what} /> : this.props.children;
+  }
+}
+
+/** Driver confirmations ("Livrat", "Problemă") for today, every 15 s. */
+function useConfirmations() {
+  useEffect(() => {
+    let stop = false;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/events", { cache: "no-store" });
+        if (res.ok && !stop) useUi.getState().setConfirmations((await res.json()).confirmations ?? {});
+      } catch {
+        // Server not reachable: nothing to show.
+      }
+    };
+    void poll();
+    const id = setInterval(poll, 15_000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, []);
+}
+
 /** Poll the GPS intake while live mode is on or the Date page is open. */
 function useLiveGps() {
   const gpsMode = useUi((s) => s.gpsMode);
@@ -99,8 +165,14 @@ function useLiveGps() {
 export function Dashboard() {
   useClock();
   useLiveGps();
+  useConfirmations();
   const view = useUi((s) => s.view);
-  useEffect(() => useUi.getState().loadSavedFleet(), []);
+  const [webgl, setWebgl] = useState(true);
+  useEffect(() => {
+    useUi.setState({ lowGfx: initialLowGfx() });
+    setWebgl(hasWebGL());
+    void useUi.getState().loadSaved();
+  }, []);
   // Keyboard: Esc closes details, 1–5 switch pages, space plays/pauses the clock.
   useEffect(() => {
     const views = ["warehouse", "map", "deliveries", "planning", "data"] as const;
@@ -124,15 +196,28 @@ export function Dashboard() {
     if (view === "map") setMapOpened(true);
   }, [view]);
   return (
-    <div className="flex h-dvh flex-col">
+    <>
+    <div id="app-root" className="flex h-dvh flex-col">
       <TopBar />
       <main className="relative flex-1 overflow-hidden">
         <div className={`absolute inset-0 isolate transition-opacity duration-500 ${view === "warehouse" ? "opacity-100" : "pointer-events-none opacity-0"}`}>
-          <WarehouseScene />
+          {webgl ? (
+            <ViewBoundary what="Depozitul 3D">
+              <WarehouseScene />
+            </ViewBoundary>
+          ) : (
+            <NoGraphics what="Depozitul 3D" />
+          )}
         </div>
         {mapOpened && (
           <div className={`absolute inset-0 transition-opacity duration-500 ${view === "map" ? "opacity-100" : "pointer-events-none opacity-0"}`}>
-            <MoldovaMap />
+            {webgl ? (
+              <ViewBoundary what="Harta">
+                <MoldovaMap />
+              </ViewBoundary>
+            ) : (
+              <NoGraphics what="Harta" />
+            )}
           </div>
         )}
         {view === "data" && <DataView />}
@@ -167,5 +252,7 @@ export function Dashboard() {
         </div>
       </main>
     </div>
+    <PrintRoot />
+    </>
   );
 }
