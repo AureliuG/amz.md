@@ -43,6 +43,10 @@ The PC must stay on during working hours. Phones outside the office can't reach 
 
 ## Option B: a small VPS with Docker (recommended)
 
+**Easiest:** `sudo ./scripts/instalare-server.sh` from the project folder. It installs Docker, asks for the domain,
+generates passwords into `.env`, starts `docker-compose.yml` (app + Caddy with automatic HTTPS) and schedules a nightly backup.
+The Romanian step-by-step version is in [GHID-INSTALARE.md](GHID-INSTALARE.md). The manual steps are below.
+
 Any 1 vCPU / 1–2 GB RAM Linux server is enough, e.g. at a Moldovan hosting provider.
 
 ```bash

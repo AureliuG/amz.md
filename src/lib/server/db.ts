@@ -35,6 +35,46 @@ export function writeJson(name: string, value: unknown): Promise<void> {
   });
 }
 
+/** Read-modify-write a JSON document without losing concurrent updates. */
+export function updateJson<T>(name: string, fallback: T, fn: (current: T) => T): Promise<T> {
+  const file = path.join(DIR, name);
+  return enqueue(file, async () => {
+    let current = fallback;
+    try {
+      current = JSON.parse(await fs.readFile(file, "utf8")) as T;
+    } catch {
+      // first write
+    }
+    const next = fn(current);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(next));
+    await fs.rename(tmp, file);
+    return next;
+  });
+}
+
+/** Can we write to the data folder? (shown on the Ghid checklist) */
+export async function dataDirStatus(): Promise<{ dir: string; writable: boolean }> {
+  try {
+    await fs.mkdir(DIR, { recursive: true });
+    const probe = path.join(DIR, `.probe-${process.pid}`);
+    await fs.writeFile(probe, "ok");
+    await fs.rm(probe);
+    return { dir: DIR, writable: true };
+  } catch {
+    return { dir: DIR, writable: false };
+  }
+}
+
+export async function listDays(kind: string): Promise<string[]> {
+  try {
+    return (await fs.readdir(path.join(DIR, kind))).filter((f) => f.endsWith(".ndjson")).map((f) => f.slice(0, -7)).sort();
+  } catch {
+    return [];
+  }
+}
+
 export function appendLog(kind: string, day: string, entries: unknown[]): Promise<void> {
   if (!entries.length) return Promise.resolve();
   const file = path.join(DIR, kind, `${day}.ndjson`);

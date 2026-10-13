@@ -1,4 +1,11 @@
-# Nobil Prest · Depozit & livrări
+# Nobil Prest · Depozit & livrări — v1.2
+
+> **În limba română:**
+> - **Instalare pe server și cum verifică compania aplicația:** [`docs/GHID-INSTALARE.md`](docs/GHID-INSTALARE.md)
+> - **Ce conține fiecare versiune și ce urmează:** [`CHANGELOG.md`](CHANGELOG.md)
+> - **Ghidul pentru utilizatori** este în aplicație: pagina **Ghid** (tasta 6). Conține primii pași, ce este nevoie, versiunea, propuneri și probleme.
+>
+> Instalare rapidă pe un server Ubuntu: `sudo ./scripts/instalare-server.sh`
 
 A warehouse and delivery dashboard (UI in Romanian) for institutional food supply (kindergartens, schools,
 hospitals, penitentiaries, social care) across Moldova, plus a phone page for drivers.
@@ -12,6 +19,7 @@ hospitals, penitentiaries, social care) across Moldova, plus a phone page for dr
 | **Livrări** (3) | Every delivery of the day: search, filters (incl. *Probleme*, *După 18:00*), sorting, driver confirmations, **Excel (CSV) export**. |
 | **Program** (4) | The day as a timeline per truck, with a "now" line and the 18:00 deadline. **Print all loading / route sheets.** |
 | **Date** (5) | Warehouse location, **fleet cards** (plate, tracker, model, capacity, refrigerated, driver, phone, fixed/daily route, active), institution import from Excel/CSV (1C export), live GPS status, simplified graphics. |
+| **Ghid** (6) | Romanian onboarding: setup checklist (checked live against the server), page guide, driver QR code, requirements, version history and roadmap, suggestions & problems (with status), FAQ. |
 
 Also:
 - **Alerte (⚠):** deliveries after 18:00, orders that don't fit a truck, chilled products on a non-refrigerated truck, missing GPS, stock that can't cover today, low stock, problems reported by drivers.
@@ -42,6 +50,8 @@ Integrations: [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md). Roadmap: [`docs/PL
 
 ## Run
 
+On a server (Docker + automatic HTTPS): `sudo ./scripts/instalare-server.sh`. Update: `sudo ./scripts/actualizare.sh`. Backup: `./scripts/backup.sh`.
+
 ```bash
 npm install
 npm run dev                       # http://localhost:3000 (no passwords)
@@ -59,7 +69,8 @@ node scripts/gps-test-sender.mjs  # fake GPS positions for testing Live GPS
 | `src/lib/store.ts` | UI state, fleet, shared data loading/saving, live GPS, confirmations. |
 | `src/lib/importer.ts` | Excel/CSV import, column recognition, geocoding, Google Maps link parsing. |
 | `src/lib/server/` | File storage (`data/`) and GPS intake used by the API routes. |
-| `src/app/api/` | `state` (shared data), `gps` (positions), `driver/position` (phone GPS), `events` (confirmations). |
+| `src/app/api/` | `state` (shared data), `gps` (positions), `driver/position` (phone GPS), `events` (confirmations), `feedback` (suggestions), `info` (setup status), `health`. |
+| `src/lib/version.ts` | App version, changelog, roadmap and requirements shown in the Ghid page (version number comes from `package.json`). |
 | `src/app/sofer/` | Driver phone page. |
 | `src/middleware.ts` | Office/driver passwords. |
 | `src/components/` | Dashboard pages, 3D scene, map, panels, printed sheets. |

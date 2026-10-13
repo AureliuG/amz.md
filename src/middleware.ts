@@ -21,23 +21,34 @@ function credentials(req: NextRequest): { user: string; pass: string } | null {
   }
 }
 
+/** Tell the API routes who is calling (used to mark suggestions as from the office or a driver). */
+function withRole(req: NextRequest, role: "office" | "driver") {
+  const headers = new Headers(req.headers);
+  headers.set("x-np-role", role);
+  return NextResponse.next({ request: { headers } });
+}
+
 const challenge = () => new NextResponse("Autentificare necesară", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Nobil Prest", charset="UTF-8"' } });
 
 export function middleware(req: NextRequest) {
   const office = process.env.APP_PASSWORD;
   const driver = process.env.DRIVER_PASSWORD;
-  if (!office && !driver) return NextResponse.next();
-
   const { pathname } = req.nextUrl;
+  // Health check for Docker/monitoring: open, shows only the version.
+  if (pathname === "/api/health") return NextResponse.next();
+  if (!office && !driver) return withRole(req, "office");
+
   // The GPS provider authenticates with its own token (checked in the route).
   if (pathname === "/api/gps" && req.method === "POST" && process.env.GPS_INGEST_TOKEN) return NextResponse.next();
 
   const c = credentials(req);
   if (!c) return challenge();
-  if (office && c.pass === office) return NextResponse.next();
+  if (office && c.pass === office) return withRole(req, "office");
   if (driver && c.user.toLowerCase() === "sofer" && c.pass === driver) {
-    // Drivers also need to read the plan (GET /api/state) to see their stops.
-    if (DRIVER_PATHS.some((r) => r.test(pathname)) || (pathname === "/api/state" && req.method === "GET")) return NextResponse.next();
+    // Drivers also need to read the plan (GET /api/state) and may send suggestions (POST /api/feedback).
+    if (DRIVER_PATHS.some((r) => r.test(pathname)) || (pathname === "/api/state" && req.method === "GET") || (pathname === "/api/feedback" && req.method === "POST")) {
+      return withRole(req, "driver");
+    }
     if (pathname === "/") return NextResponse.redirect(new URL("/sofer", req.url));
     return new NextResponse("Acces doar la pagina Șofer", { status: 403 });
   }

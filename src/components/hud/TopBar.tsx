@@ -1,7 +1,9 @@
 "use client";
 
-import { Bell, CalendarRange, Database, ListChecks, Map as MapIcon, Pause, Play, Search, TriangleAlert, Warehouse } from "lucide-react";
+import { Bell, BookOpen, CalendarRange, Database, ListChecks, Map as MapIcon, Pause, Play, Search, TriangleAlert, Warehouse } from "lucide-react";
 import { computeAlerts, type Severity } from "@/lib/alerts";
+import { APP_VERSION_SHORT } from "@/lib/version";
+import { openGuide } from "../GuideView";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { eventsUntil, type EventKind } from "@/lib/events";
 import { INSTITUTIONS } from "@/lib/seed";
@@ -29,6 +31,9 @@ export function TopBar() {
           <span className="block whitespace-nowrap text-[15px] font-semibold tracking-tight text-slate-900">Nobil Prest</span>
           <span className="hidden whitespace-nowrap text-[10px] text-slate-400 xl:block">Depozit & livrări</span>
         </span>
+        <button onClick={() => openGuide("versiune")} title="Versiunea aplicației și ce urmează" className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-500 hover:bg-blue-50 hover:text-blue-700">
+          v{APP_VERSION_SHORT}
+        </button>
       </div>
       <SearchBox />
       <div className="ml-auto flex items-center gap-1 rounded-xl bg-slate-100 p-1">
@@ -39,6 +44,7 @@ export function TopBar() {
             ["deliveries", "Livrări", ListChecks],
             ["planning", "Program", CalendarRange],
             ["data", "Date", Database],
+            ["guide", "Ghid", BookOpen],
           ] as const
         ).map(([v, label, Icon]) => (
           <button key={v} onClick={() => setView(v)} title={label} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition ${view === v ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>

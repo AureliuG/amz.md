@@ -47,7 +47,7 @@ async function persist(part: Shared): Promise<"server" | "local"> {
   }
 }
 
-export type View = "warehouse" | "map" | "deliveries" | "planning" | "data";
+export type View = "warehouse" | "map" | "deliveries" | "planning" | "data" | "guide";
 
 interface UiState {
   view: View;

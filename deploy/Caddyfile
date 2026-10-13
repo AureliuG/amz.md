@@ -1,0 +1,6 @@
+# DOMAIN din .env: un domeniu (ex. livrari.nobilprest.md) => HTTPS automat;
+# ":80" => doar HTTP pe IP, pentru test (fără GPS din telefoane).
+{$DOMAIN::80} {
+	encode gzip
+	reverse_proxy app:3000
+}

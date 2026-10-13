@@ -1,11 +1,12 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, ChevronDown, Navigation, Phone, RadioTower, RefreshCw, Truck as TruckIcon } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, MessageSquarePlus, Navigation, Phone, RadioTower, RefreshCw, Truck as TruckIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { INSTITUTION_BY_ID, PRODUCT_BY_ID } from "@/lib/seed";
 import { fmtTime } from "@/lib/sim";
 import { useUi } from "@/lib/store";
 import type { Confirmation } from "@/lib/types";
+import { APP_VERSION_SHORT } from "@/lib/version";
 
 const TRUCK_KEY = "nobilprest.driverTruck";
 const QUEUE_KEY = "nobilprest.driverQueue";
@@ -276,11 +277,15 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-[#4d82ff] to-[#1f3fb3] text-[12px] font-bold text-white">NP</div>
         <div className="leading-tight">
           <div className="text-[14px] font-semibold text-slate-900">Nobil Prest · Șofer</div>
-          <div className="text-[11px] capitalize text-slate-500">{date}</div>
+          <div className="text-[11px] text-slate-500 first-letter:uppercase">{date}</div>
         </div>
         <TruckIcon size={18} className="ml-auto text-slate-400" />
       </header>
-      <main className="mx-auto max-w-[560px] p-3 pb-10">{children}</main>
+      <main className="mx-auto max-w-[560px] p-3 pb-10">
+        {children}
+        <DriverFeedback />
+        <p className="mt-4 text-center text-[11px] text-slate-400">Nobil Prest · versiunea {APP_VERSION_SHORT}</p>
+      </main>
     </div>
   );
 }
@@ -343,6 +348,55 @@ function PhoneGps({ truckNo }: { truckNo: number }) {
         <input type="checkbox" className="h-5 w-5" checked={on} onChange={(e) => setOn(e.target.checked)} />
       </label>
       <p className="mt-1 text-[11.5px] text-slate-500">{state || "Pentru mașinile fără tracker GPS. Lăsați pagina deschisă în timpul cursei."}</p>
+    </div>
+  );
+}
+
+/** Drivers can report a problem with the app or suggest something; it lands in the office's Ghid → Propuneri list. */
+function DriverFeedback() {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<"problema" | "propunere">("problema");
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  async function send() {
+    const truck = Number(localStorage.getItem(TRUCK_KEY)) || 0;
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: truck ? `Șofer · Mașina ${truck}` : "Șofer", kind, page: "Șofer", priority: kind === "problema" ? "mare" : "medie", text }),
+    }).catch(() => null);
+    if (res?.ok) {
+      setText("");
+      setMsg("Trimis. Mulțumim!");
+    } else setMsg("Nu s-a trimis. Verificați internetul și încercați din nou.");
+  }
+  return (
+    <div className="mt-5 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 text-left text-[13.5px] font-medium text-slate-700">
+        <MessageSquarePlus size={16} className="text-blue-600" /> Ceva nu merge sau aveți o idee?
+        <ChevronDown size={15} className={`ml-auto transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-2.5 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ["problema", "Problemă"],
+                ["propunere", "Propunere"],
+              ] as const
+            ).map(([k, l]) => (
+              <button key={k} onClick={() => setKind(k)} className={`rounded-xl py-2 text-[13px] font-medium ${kind === k ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Scrieți pe scurt ce s-a întâmplat sau ce ar ajuta…" className="min-h-[80px] w-full rounded-xl border border-slate-200 p-2.5 text-[13.5px] outline-none focus:border-blue-300" />
+          <button disabled={text.trim().length < 3} onClick={() => void send()} className="w-full rounded-xl bg-blue-600 py-2.5 text-[14px] font-semibold text-white disabled:opacity-40">
+            Trimite la oficiu
+          </button>
+          {msg && <p className="text-center text-[12.5px] text-slate-600">{msg}</p>}
+        </div>
+      )}
     </div>
   );
 }

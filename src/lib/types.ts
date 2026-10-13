@@ -131,3 +131,20 @@ export type Selection =
   | { kind: "zone"; id: StorageZone | "office" }
   | { kind: "warehouse" }
   | null;
+
+/** A suggestion, problem or question sent from the Ghid page or the Șofer page. */
+export interface Feedback {
+  id: string;
+  ts: number;
+  name: string;
+  kind: "problema" | "propunere" | "intrebare";
+  page: string;
+  text: string;
+  priority: "mica" | "medie" | "mare";
+  status: "nou" | "in-lucru" | "planificat" | "rezolvat" | "respins";
+  /** Answer or note from whoever handles it (e.g. "în versiunea 1.3"). */
+  reply?: string;
+  /** App version the user had when sending it. */
+  version: string;
+  from: "birou" | "sofer";
+}

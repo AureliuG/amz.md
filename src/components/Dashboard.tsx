@@ -7,6 +7,8 @@ import { DAY_END, initialLowGfx, useUi } from "@/lib/store";
 import { FleetPanel, TrackingPanel } from "./hud/BottomPanels";
 import { DeliveriesView } from "./DeliveriesView";
 import { DataView } from "./DataView";
+import { GuideView } from "./GuideView";
+import { WelcomeModal } from "./WelcomeModal";
 import { PlanningView } from "./PlanningView";
 import { PrintRoot } from "./PrintSheets";
 import { DetailPanel } from "./hud/DetailPanel";
@@ -173,15 +175,15 @@ export function Dashboard() {
     setWebgl(hasWebGL());
     void useUi.getState().loadSaved();
   }, []);
-  // Keyboard: Esc closes details, 1–5 switch pages, space plays/pauses the clock.
+  // Keyboard: Esc closes details, 1–6 switch pages, space plays/pauses the clock.
   useEffect(() => {
-    const views = ["warehouse", "map", "deliveries", "planning", "data"] as const;
+    const views = ["warehouse", "map", "deliveries", "planning", "data", "guide"] as const;
     const onKey = (e: KeyboardEvent) => {
       const ui = useUi.getState();
       if (e.key === "Escape") return ui.select(null);
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key >= "1" && e.key <= "5") ui.setView(views[Number(e.key) - 1]);
+      if (e.key >= "1" && e.key <= "6") ui.setView(views[Number(e.key) - 1]);
       if (e.key === " ") {
         e.preventDefault();
         ui.setPlaying(!ui.playing);
@@ -221,6 +223,7 @@ export function Dashboard() {
           </div>
         )}
         {view === "data" && <DataView />}
+        {view === "guide" && <GuideView />}
         {(view === "deliveries" || view === "planning") && (
           <>
             {view === "deliveries" ? <DeliveriesView /> : <PlanningView />}
@@ -230,7 +233,7 @@ export function Dashboard() {
           </>
         )}
         {/* HUD: the overlay never blocks the scene except where panels are */}
-        <div className={`pointer-events-none absolute inset-0 z-10 flex ${view === "deliveries" || view === "planning" || view === "data" ? "hidden" : ""}`} data-hud>
+        <div className={`pointer-events-none absolute inset-0 z-10 flex ${view === "deliveries" || view === "planning" || view === "data" || view === "guide" ? "hidden" : ""}`} data-hud>
           <div className="flex h-full w-full flex-col justify-between gap-3 p-3 sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <Kpis />
@@ -253,6 +256,7 @@ export function Dashboard() {
       </main>
     </div>
     <PrintRoot />
+    <WelcomeModal />
     </>
   );
 }
