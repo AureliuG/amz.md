@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { api } from "./base";
 import { buildFleet, DEFAULT_FLEET, DEFAULT_WAREHOUSE, defaultTruckInfo, MAX_TRUCKS, replaceInstitutions, setWarehouse } from "./seed";
 import type { Confirmation, Institution, LngLat, Selection, Truck, TruckInfo } from "./types";
 
@@ -40,7 +41,7 @@ type Shared = { institutions?: Institution[] | null; warehouse?: LngLat | null; 
 async function persist(part: Shared): Promise<"server" | "local"> {
   for (const [k, v] of Object.entries(part)) cache.save(KEYS[k as keyof Shared], v);
   try {
-    const res = await fetch("/api/state", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(part) });
+    const res = await fetch(api("/api/state"), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(part) });
     return res.ok ? "server" : "local";
   } catch {
     return "local";
@@ -145,7 +146,7 @@ export const useUi = create<UiState>((set, get) => {
       let shared: Shared | null = null;
       let where: "server" | "local" = "local";
       try {
-        const res = await fetch("/api/state", { cache: "no-store" });
+        const res = await fetch(api("/api/state"), { cache: "no-store" });
         if (res.ok) {
           shared = (await res.json()) as Shared;
           where = "server";

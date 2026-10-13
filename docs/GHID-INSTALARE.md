@@ -30,12 +30,15 @@ Reale sunt deja:
 
 ## 2. Ce este nevoie
 
-### Server (recomandat)
-- **Un server virtual (VPS)** cu **Ubuntu 22.04 sau 24.04**: 1 procesor, **2 GB RAM**, 20 GB disc.
-  Costă aproximativ **5–15 € pe lună** (orice furnizor de hosting din Moldova sau din UE).
-- **Un domeniu sau subdomeniu**, de exemplu `livrari.nobilprest.md`, cu o înregistrare DNS de tip **A** spre IP-ul serverului.
-  Fără domeniu aplicația merge doar pentru test (fără HTTPS, fără GPS din telefoane).
-- **Acces SSH** la server pentru instalare (o singură dată, ~30 de minute).
+### Unde rulează: două variante
+- **Varianta simplă: găzduirea web pe care o aveți deja (cPanel)**, de ex. `https://draur.com/delivery/`.
+  Se încarcă o arhivă și se dezarhivează, fără costuri în plus. Vezi **secțiunea 3**.
+- **Varianta server (VPS)**, pentru mai târziu sau dacă preferați un server separat:
+  - **Un server virtual (VPS)** cu **Ubuntu 22.04 sau 24.04**: 1 procesor, **2 GB RAM**, 20 GB disc.
+    Costă aproximativ **5–15 € pe lună** (orice furnizor de hosting din Moldova sau din UE).
+  - **Un domeniu sau subdomeniu**, de exemplu `livrari.nobilprest.md`, cu o înregistrare DNS de tip **A** spre IP-ul serverului.
+    Fără domeniu aplicația merge doar pentru test (fără HTTPS, fără GPS din telefoane).
+  - **Acces SSH** la server pentru instalare (o singură dată, ~30 de minute).
 
 ### Calculatoarele din oficiu
 - **Google Chrome** sau **Microsoft Edge** actualizat.
@@ -57,7 +60,54 @@ Reale sunt deja:
 
 ---
 
-## 3. Instalare pe server (pas cu pas)
+## 3. Varianta simplă: pe găzduirea web (cPanel), fără server separat
+
+Dacă firma are deja un site cu cPanel, aplicația se pune într-un folder al domeniului, de ex. **`https://draur.com/delivery/`**.
+Nu trebuie Node.js, Docker sau SSH. Este nevoie doar de PHP 7.4 sau mai nou, pe care îl are orice găzduire cPanel.
+
+**Ce primiți:** arhiva `nobilprest-delivery-v1.2.0.zip` (~1 MB).
+
+**Pași (5 minute):**
+1. cPanel → **File Manager** → intrați în folderul domeniului (de ex. `draur.com`).
+2. **Upload** → alegeți arhiva → așteptați 100% → **Go Back**.
+3. Click dreapta pe arhivă → **Extract** → **Extract File(s)**. Apare folderul `delivery`.
+4. Deschideți **`https://draur.com/delivery/`** și introduceți **codul de acces**.
+5. Arhiva .zip din folder se poate șterge.
+
+**Codul de acces** se schimbă în `delivery/config.php` (click dreapta → **Edit**):
+
+| Setare | Ce face |
+|---|---|
+| `cod_birou` | Codul pentru birou: vede tot. |
+| `cod_sofer` | Cod separat pentru șoferi: văd doar pagina Șofer. Gol = șoferii intră cu codul biroului. |
+| `cheie_gps` | Cheia pe care o folosește furnizorul GPS (`Authorization: Bearer <cheie>`). |
+| `sare` | O valoare secretă. Dacă o schimbați, toată lumea trebuie să introducă din nou codul. |
+
+Codul nu ține cont de literele mari sau mici. Calculatorul și telefonul îl țin minte (până la un an).
+După 10 coduri greșite în 15 minute de la aceeași adresă, intrarea se blochează 15 minute.
+Pentru a ieși pe un calculator: adăugați `?iesire` la adresă (de ex. `https://draur.com/delivery/?iesire`).
+
+**Unde sunt datele:** în folderul **`nobilprest-date-delivery`**, lângă folderul domeniului (de ex. `/home/<cont>/nobilprest-date-delivery`).
+Este în afara site-ului, deci nu poate fi deschis din internet.
+**Copie de rezervă:** File Manager → click dreapta pe acest folder → **Compress** → descărcați arhiva. Sau cPanel → **Backup**.
+
+**Actualizare la o versiune nouă:** primiți `nobilprest-delivery-vX.Y.Z-actualizare.zip` (fără `config.php`).
+Încărcați-o în același loc → **Extract** (fișierele vechi se înlocuiesc). Codul și datele rămân.
+
+**HTTPS:** folosiți adresa cu **`https://`**. Dacă browserul spune că nu e sigură, cPanel → **SSL/TLS Status** → **Run AutoSSL**.
+Fără https telefoanele nu pot trimite poziția GPS.
+
+**Diferențe față de varianta server:**
+- intrarea se face cu un cod, pe o pagină, nu cu fereastra de parolă a browserului;
+- copiile de rezervă se fac din cPanel;
+- restul este la fel.
+
+*Pentru cine pregătește pachetul:* `COD=<cod> ./scripts/pachet-gazduire.sh delivery` → arhivele apar în `dist/`.
+Setările (cod, chei) se păstrează în `dist/delivery-config.php` și se refolosesc la următoarele pachete.
+
+---
+
+## 4. Instalare pe server (pas cu pas)
 
 > Comenzile se scriu în terminalul serverului (conectat prin SSH). Fiecare linie se copiază și se apasă Enter.
 
@@ -113,7 +163,7 @@ Este doar pentru test: telefoanele și furnizorul GPS nu pot ajunge la acest cal
 
 ---
 
-## 4. Prima configurare (15 minute, în aplicație)
+## 5. Prima configurare (15 minute, în aplicație)
 
 Deschideți **Ghid → Primii pași**. Lista se verifică automat și arată ce mai lipsește:
 
@@ -121,12 +171,12 @@ Deschideți **Ghid → Primii pași**. Lista se verifică automat și arată ce 
 2. **Flota.** Date → Flota: completați modelul, capacitatea (kg), frigorific, șoferul și telefonul pentru fiecare mașină → **Salvează flota**.
 3. **Instituțiile.** Date → Instituții: trageți fișierul Excel exportat din 1C. Verificați coloanele recunoscute → **Aplică**.
    Pentru adresele fără coordonate apăsați **Caută adresele** (durează ~15 minute pentru 800 de adrese).
-4. **Șoferii.** Ghid → Pentru șoferi: scanați codul QR cu telefonul fiecărui șofer, introduceți parola de șofer și alegeți mașina.
+4. **Șoferii.** Ghid → Pentru șoferi: scanați codul QR cu telefonul fiecărui șofer, introduceți parola de șofer (sau codul de acces, pe găzduirea web) și alegeți mașina.
 5. **Primul test.** Un șofer apasă „Livrat” la o oprire. În ~15 secunde apare în **Livrări** cu „✔ confirmat”.
 
 ---
 
-## 5. Cum verifică compania aplicația (o zi de test)
+## 6. Cum verifică compania aplicația (o zi de test)
 
 | # | Ce faceți | Ce trebuie să vedeți |
 |---|---|---|
@@ -140,11 +190,11 @@ Deschideți **Ghid → Primii pași**. Lista se verifică automat și arată ce 
 | 8 | Moldova → Date → **Live GPS** | Mașinile care trimit poziții apar unde sunt (după conectarea GPS) |
 | 9 | Ghid → **Propuneri și probleme** → scrieți ceva | Apare în listă, vizibil pentru tot oficiul |
 
-Ce nu vă place sau ce lipsește: scrieți la **Ghid → Propuneri și probleme** (vezi secțiunea 8).
+Ce nu vă place sau ce lipsește: scrieți la **Ghid → Propuneri și probleme** (vezi secțiunea 9).
 
 ---
 
-## 6. Actualizare la o versiune nouă
+## 7. Actualizare la o versiune nouă
 
 ```bash
 cd nobilprest
@@ -156,7 +206,7 @@ Versiunea curentă apare în aplicație lângă numele Nobil Prest (ex. **v1.2**
 
 ---
 
-## 7. Copii de rezervă și restaurare
+## 8. Copii de rezervă și restaurare
 
 - Automat în fiecare noapte (02:15), în `nobilprest/backups/`. Se păstrează ultimele 30.
 - Manual, oricând: `./scripts/backup.sh`.
@@ -182,7 +232,7 @@ Ce conține folderul `data/`:
 
 ---
 
-## 8. Propuneri: cum se adaugă ceva nou
+## 9. Propuneri: cum se adaugă ceva nou
 
 1. **Oricine** din oficiu scrie în aplicație: **Ghid → Propuneri și probleme**. Șoferii scriu de pe pagina Șofer, jos: „Ceva nu merge sau aveți o idee?”.
 2. O propunere bună spune:
@@ -200,7 +250,7 @@ Ce conține folderul `data/`:
 
 ---
 
-## 9. Ce urmează
+## 10. Ce urmează
 
 | Versiune | Ce aduce | Ce trebuie de la voi |
 |---|---|---|
@@ -213,7 +263,7 @@ Lista completă și actualizată: în aplicație, **Ghid → Versiunea și ce ur
 
 ---
 
-## 10. Probleme frecvente
+## 11. Probleme frecvente
 
 | Problemă | Ce faceți |
 |---|---|
@@ -227,7 +277,7 @@ Lista completă și actualizată: în aplicație, **Ghid → Versiunea și ce ur
 
 ---
 
-## 11. Pentru partea tehnică (pe scurt)
+## 12. Pentru partea tehnică (pe scurt)
 
 - O singură aplicație Node.js (Next.js 15), în Docker. **Caddy** face HTTPS automat. Datele sunt fișiere în `data/`, fără bază de date separată.
 - Setări în `.env`:

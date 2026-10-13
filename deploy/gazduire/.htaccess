@@ -1,0 +1,13 @@
+# Nobil Prest · Depozit & livrări — versiunea pentru găzduire web (cPanel).
+# Toate paginile trec prin gate.php (cere codul de acces); datele trec prin api.php.
+# Publice: doar fișierele aplicației din _next/static, iconița, manifestul și conturul hărții (nu conțin date).
+DirectoryIndex index.html
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+  RewriteRule ^_next/static/ - [L]
+  RewriteRule ^(icon\.svg|manifest\.webmanifest|geo/region\.json)$ - [L]
+  RewriteRule ^api/(.*)$ api.php?r=$1 [QSA,L]
+  RewriteRule ^(api|gate)\.php$ - [L]
+  RewriteRule ^ gate.php [L]
+</IfModule>

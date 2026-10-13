@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, MessageSquarePlus, Navigation
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { INSTITUTION_BY_ID, PRODUCT_BY_ID } from "@/lib/seed";
 import { fmtTime } from "@/lib/sim";
+import { api } from "@/lib/base";
 import { useUi } from "@/lib/store";
 import type { Confirmation } from "@/lib/types";
 import { APP_VERSION_SHORT } from "@/lib/version";
@@ -37,7 +38,7 @@ async function flushQueue(): Promise<number> {
   let sent = 0;
   for (const item of q) {
     try {
-      const res = await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
+      const res = await fetch(api("/api/events"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
       if (!res.ok) break;
       sent++;
     } catch {
@@ -68,7 +69,7 @@ export function DriverApp() {
   const refresh = useCallback(async () => {
     setPending(await flushQueue());
     try {
-      const res = await fetch("/api/events", { cache: "no-store" });
+      const res = await fetch(api("/api/events"), { cache: "no-store" });
       if (res.ok) setServer((await res.json()).confirmations ?? {});
     } catch {
       // offline
@@ -322,7 +323,7 @@ function PhoneGps({ truckNo }: { truckNo: number }) {
         if (now - lastSent.current < 25_000) return;
         lastSent.current = now;
         const { latitude, longitude, speed, heading } = pos.coords;
-        fetch("/api/driver/position", {
+        fetch(api("/api/driver/position"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ truck: truckNo, lat: latitude, lng: longitude, speed: speed !== null ? speed * 3.6 : undefined, heading: heading ?? undefined }),
@@ -360,7 +361,7 @@ function DriverFeedback() {
   const [msg, setMsg] = useState<string | null>(null);
   async function send() {
     const truck = Number(localStorage.getItem(TRUCK_KEY)) || 0;
-    const res = await fetch("/api/feedback", {
+    const res = await fetch(api("/api/feedback"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: truck ? `Șofer · Mașina ${truck}` : "Șofer", kind, page: "Șofer", priority: kind === "problema" ? "mare" : "medie", text }),

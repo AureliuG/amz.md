@@ -37,7 +37,8 @@ export async function POST(req: Request) {
     priority: PRIORITIES.has(String(b.priority)) ? (b.priority as Feedback["priority"]) : "medie",
     status: "nou",
     version: APP_VERSION,
-    from: req.headers.get("x-np-role") === "driver" ? "sofer" : "birou",
+    // Drivers who log in with the office password are recognised by the page they write from.
+    from: req.headers.get("x-np-role") === "driver" || clip(b.page, 60) === "Șofer" ? "sofer" : "birou",
   };
   await updateJson<Feedback[]>("feedback.json", [], (list) => [...list, item].slice(-2000));
   return NextResponse.json({ ok: true, item });

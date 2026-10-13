@@ -14,6 +14,7 @@ import { PrintRoot } from "./PrintSheets";
 import { DetailPanel } from "./hud/DetailPanel";
 import { Kpis } from "./hud/Kpis";
 import { TopBar } from "./hud/TopBar";
+import { api } from "@/lib/base";
 
 // WebGL views can't render on the server: load them in the browser only.
 const Loading = () => (
@@ -125,7 +126,7 @@ function useConfirmations() {
     let stop = false;
     const poll = async () => {
       try {
-        const res = await fetch("/api/events", { cache: "no-store" });
+        const res = await fetch(api("/api/events"), { cache: "no-store" });
         if (res.ok && !stop) useUi.getState().setConfirmations((await res.json()).confirmations ?? {});
       } catch {
         // Server not reachable: nothing to show.
@@ -149,7 +150,7 @@ function useLiveGps() {
     let stop = false;
     const poll = async () => {
       try {
-        const res = await fetch("/api/gps", { cache: "no-store" });
+        const res = await fetch(api("/api/gps"), { cache: "no-store" });
         if (res.ok && !stop) useUi.getState().setLive((await res.json()).positions ?? {});
       } catch {
         // Offline: keep the last positions.

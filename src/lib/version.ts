@@ -31,6 +31,7 @@ export const CHANGELOG: Release[] = [
       "Poziția GPS din telefonul șoferului pentru mașinile fără tracker",
       "Export Excel (CSV) al livrărilor, necesarul zilei față de stoc",
       "Parole pentru birou și pentru șoferi, instalare pe server cu un singur script, copii de rezervă",
+      "Se poate pune și pe găzduirea web existentă (cPanel), într-un folder, cu cod de acces",
       "Ghid în aplicație, listă de verificare „Primii pași”, propuneri și probleme",
     ],
   },
@@ -114,9 +115,10 @@ export const REQUIREMENTS: { title: string; items: string[] }[] = [
   {
     title: "Server",
     items: [
-      "Un server virtual (VPS) cu Linux Ubuntu 22.04 sau 24.04: 1 procesor, 2 GB RAM, 20 GB disc (aprox. 5–15 € pe lună)",
-      "Un domeniu sau subdomeniu, de ex. livrari.nobilprest.md, îndreptat spre IP-ul serverului (necesar pentru HTTPS și GPS-ul din telefoane)",
-      "Acces SSH pentru instalare (o singură dată, ~30 de minute)",
+      "Varianta simplă: găzduirea web existentă cu cPanel și PHP (de ex. draur.com/delivery). Se încarcă o arhivă, fără costuri în plus",
+      "Sau, mai târziu: un server virtual (VPS) cu Linux Ubuntu 22.04 sau 24.04: 1 procesor, 2 GB RAM, 20 GB disc (aprox. 5–15 € pe lună)",
+      "Pentru VPS: un domeniu sau subdomeniu, de ex. livrari.nobilprest.md, îndreptat spre IP-ul serverului (necesar pentru HTTPS și GPS-ul din telefoane)",
+      "Pentru VPS: acces SSH pentru instalare (o singură dată, ~30 de minute)",
     ],
   },
   {

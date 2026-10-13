@@ -7,3 +7,5 @@ next-env.d.ts
 /data/
 .env
 /backups/
+/dist/
+/.build-gazduire/

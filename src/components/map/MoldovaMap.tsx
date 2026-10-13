@@ -4,6 +4,7 @@ import maplibregl from "maplibre-gl";
 import type { GeoJSONSource, LayerSpecification, Map as MLMap, StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef } from "react";
+import { BASE } from "@/lib/base";
 import { arcLine, arcPoint } from "@/lib/geo";
 import { INSTITUTION_BY_ID, INSTITUTIONS, WAREHOUSE } from "@/lib/seed";
 import { effectiveStatus, truckState } from "@/lib/sim";
@@ -17,7 +18,7 @@ import type { LngLat, Truck } from "@/lib/types";
 const STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    region: { type: "geojson", data: "/geo/region.json" },
+    region: { type: "geojson", data: `${BASE}/geo/region.json` },
   },
   layers: [
     { id: "bg", type: "background", paint: { "background-color": "#dfe6f4" } },

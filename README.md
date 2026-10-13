@@ -5,7 +5,8 @@
 > - **Ce conține fiecare versiune și ce urmează:** [`CHANGELOG.md`](CHANGELOG.md)
 > - **Ghidul pentru utilizatori** este în aplicație: pagina **Ghid** (tasta 6). Conține primii pași, ce este nevoie, versiunea, propuneri și probleme.
 >
-> Instalare rapidă pe un server Ubuntu: `sudo ./scripts/instalare-server.sh`
+> Pe găzduirea web existentă (cPanel): `COD=… ./scripts/pachet-gazduire.sh delivery` → încărcați arhiva din `dist/` și dezarhivați-o.
+> Pe un server Ubuntu: `sudo ./scripts/instalare-server.sh`
 
 A warehouse and delivery dashboard (UI in Romanian) for institutional food supply (kindergartens, schools,
 hospitals, penitentiaries, social care) across Moldova, plus a phone page for drivers.
@@ -52,6 +53,10 @@ Integrations: [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md). Roadmap: [`docs/PL
 
 On a server (Docker + automatic HTTPS): `sudo ./scripts/instalare-server.sh`. Update: `sudo ./scripts/actualizare.sh`. Backup: `./scripts/backup.sh`.
 
+On ordinary cPanel/PHP web hosting, in a subfolder: `COD=<access code> ./scripts/pachet-gazduire.sh delivery` builds `dist/nobilprest-delivery-v<version>.zip`
+(static export + `deploy/gazduire/`: `gate.php` access-code page and file server, `api.php` with the same API as `src/app/api`).
+Upload and extract it in the domain folder. Data goes to `nobilprest-date-<folder>` outside the web root.
+
 ```bash
 npm install
 npm run dev                       # http://localhost:3000 (no passwords)
@@ -73,4 +78,6 @@ node scripts/gps-test-sender.mjs  # fake GPS positions for testing Live GPS
 | `src/lib/version.ts` | App version, changelog, roadmap and requirements shown in the Ghid page (version number comes from `package.json`). |
 | `src/app/sofer/` | Driver phone page. |
 | `src/middleware.ts` | Office/driver passwords. |
+| `src/lib/base.ts` | Subfolder prefix for the web-hosting build (`api()`, `page()`). |
+| `deploy/gazduire/` | PHP version of the API + access-code page for cPanel hosting. |
 | `src/components/` | Dashboard pages, 3D scene, map, panels, printed sheets. |

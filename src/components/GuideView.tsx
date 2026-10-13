@@ -23,6 +23,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DATA_SOURCE } from "@/lib/seed";
 import { useUi, type View } from "@/lib/store";
+import { ACCESS_BY_CODE, api, BASE, page } from "@/lib/base";
 import type { Feedback } from "@/lib/types";
 import { APP_VERSION_SHORT, CHANGELOG, RELEASE_DATE, REQUIREMENTS, ROADMAP } from "@/lib/version";
 import { Card, Chip, type Tone } from "./hud/ui";
@@ -156,7 +157,7 @@ function Checklist() {
   const setView = useUi((s) => s.setView);
   const storage = useUi((s) => s.storage);
   useEffect(() => {
-    fetch("/api/info", { cache: "no-store" })
+    fetch(api("/api/info"), { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setInfo)
       .catch(() => setError(true));
@@ -166,13 +167,22 @@ function Checklist() {
   const steps: Step[] = info
     ? [
         { ok: info.data.writable && storage === "server", title: "Serverul rulează și salvează datele", detail: info.data.writable ? "Datele se păstrează pe server, aceleași pe toate calculatoarele." : "Folderul de date nu poate fi scris. Verificați instalarea (DATA_DIR)." },
-        { ok: info.auth.office && info.auth.driver ? true : "warn", title: "Parole pentru birou și șoferi", detail: info.auth.office && info.auth.driver ? "Accesul este protejat." : "Fără parole oricine are adresa poate intra. Scriptul de instalare le generează automat." },
+        {
+          ok: info.auth.office && info.auth.driver ? true : "warn",
+          title: ACCESS_BY_CODE ? "Cod de acces pentru birou și șoferi" : "Parole pentru birou și șoferi",
+          detail:
+            info.auth.office && info.auth.driver
+              ? "Accesul este protejat."
+              : info.auth.office
+                ? `Accesul este protejat. Șoferii intră cu ${ACCESS_BY_CODE ? "același cod" : "aceeași parolă"} ca biroul și pot vedea tot; se poate stabili ${ACCESS_BY_CODE ? "un cod separat (config.php)" : "o parolă separată (DRIVER_PASSWORD)"}.`
+                : "Fără parole oricine are adresa poate intra. Scriptul de instalare le generează automat.",
+        },
         { ok: https ? true : "warn", title: "Adresă sigură (https://)", detail: https ? "Telefoanele pot trimite poziția GPS." : "Pe http:// telefoanele nu pot trimite GPS. Folosiți un domeniu (instalarea face HTTPS automat)." },
         { ok: info.warehouseSet, title: "Locația depozitului", detail: info.warehouseSet ? "Setată." : "Introduceți coordonatele depozitului pe pagina Date.", action: ["Date", () => setView("data")] },
         { ok: info.fleetSaved, title: "Fișele mașinilor", detail: info.fleetSaved ? "Flota a fost salvată. Verificați modelele, capacitățile și șoferii." : "Completați modelul, capacitatea, șoferul și telefonul pentru fiecare mașină.", action: ["Flota", () => setView("data")] },
         { ok: info.institutions > 0, title: "Lista instituțiilor", detail: info.institutions > 0 ? `${info.institutions} instituții importate.` : "Încărcați Excel-ul cu instituțiile (export din 1C) pe pagina Date.", action: ["Importă", () => setView("data")] },
-        { ok: info.gps.trackersLastDay > 0 ? true : info.gps.phonesLastDay > 0 ? "warn" : false, title: "GPS de la furnizor", detail: info.gps.trackersLastDay > 0 ? `${info.gps.trackersLastDay} ${info.gps.trackersLastDay === 1 ? "tracker a trimis" : "trackere au trimis"} poziții în ultimele 24 h.` : "Furnizorul GPS trebuie să trimită pozițiile la /api/gps (vezi Ce este nevoie)." },
-        { ok: info.confirmations.days > 0, title: "Primul șofer a confirmat o livrare", detail: info.confirmations.days > 0 ? `Confirmări în ${info.confirmations.days} ${info.confirmations.days === 1 ? "zi" : "zile"}, azi ${info.confirmations.today}.` : "Dați unui șofer adresa /sofer și parola, rugați-l să apese „Livrat” la o oprire.", action: ["Pentru șoferi", () => document.getElementById("ghid-soferi")?.scrollIntoView({ behavior: "smooth" })] },
+        { ok: info.gps.trackersLastDay > 0 ? true : info.gps.phonesLastDay > 0 ? "warn" : false, title: "GPS de la furnizor", detail: info.gps.trackersLastDay > 0 ? `${info.gps.trackersLastDay} ${info.gps.trackersLastDay === 1 ? "tracker a trimis" : "trackere au trimis"} poziții în ultimele 24 h.` : `Furnizorul GPS trebuie să trimită pozițiile la ${BASE}/api/gps (vezi Ce este nevoie).` },
+        { ok: info.confirmations.days > 0, title: "Primul șofer a confirmat o livrare", detail: info.confirmations.days > 0 ? `Confirmări în ${info.confirmations.days} ${info.confirmations.days === 1 ? "zi" : "zile"}, azi ${info.confirmations.today}.` : `Dați unui șofer adresa ${page("/sofer")} și ${ACCESS_BY_CODE ? "codul" : "parola"}, rugați-l să apese „Livrat” la o oprire.`, action: ["Pentru șoferi", () => document.getElementById("ghid-soferi")?.scrollIntoView({ behavior: "smooth" })] },
         { ok: "later", title: "Comenzile din 1C", detail: "În versiunea 1.4: export automat din 1C 7.7. Până atunci comenzile sunt exemple." },
       ]
     : [];
@@ -294,7 +304,7 @@ function Drivers() {
   const [qr, setQr] = useState<string | null>(null);
   const [url, setUrl] = useState("");
   useEffect(() => {
-    const u = `${window.location.origin}/sofer`;
+    const u = `${window.location.origin}${page("/sofer")}`;
     setUrl(u);
     import("qrcode")
       .then((m) => m.toDataURL(u, { margin: 1, width: 220, color: { dark: "#1f3fb3" } }))
@@ -306,10 +316,16 @@ function Drivers() {
       <div className="grid gap-5 md:grid-cols-[1fr_220px]">
         <ol className="list-decimal space-y-1.5 pl-5 text-[12.5px] text-slate-600">
           <li>
-            Scanați codul QR cu camera telefonului sau deschideți <b className="text-slate-800">{url || "/sofer"}</b>.
+            Scanați codul QR cu camera telefonului sau deschideți <b className="text-slate-800">{url || page("/sofer")}</b>.
           </li>
           <li>
-            Utilizator <b className="text-slate-800">sofer</b>, parola pentru șoferi (o primiți de la cel care a instalat serverul).
+            {ACCESS_BY_CODE ? (
+              <>Introduceți codul de acces (îl primiți de la birou). Telefonul îl ține minte.</>
+            ) : (
+              <>
+                Utilizator <b className="text-slate-800">sofer</b>, parola pentru șoferi (o primiți de la cel care a instalat serverul).
+              </>
+            )}
           </li>
           <li>Alegeți numărul mașinii o singură dată. Telefonul îl ține minte.</li>
           <li>Adăugați pe ecranul principal: Chrome → meniu ⋮ → „Adaugă pe ecranul de pornire” (Android), sau Partajează → „Pe ecranul principal” (iPhone).</li>
@@ -333,7 +349,7 @@ function Drivers() {
 /* ---------- 6. Requirements ---------- */
 function Requirements() {
   return (
-    <Section id="cerinte" icon={<Server size={19} />} title="Ce este nevoie pentru a funcționa" sub="Instalarea pe server durează ~30 de minute (vezi docs/GHID-INSTALARE.md, în limba română).">
+    <Section id="cerinte" icon={<Server size={19} />} title="Ce este nevoie pentru a funcționa" sub={ACCESS_BY_CODE ? "Aplicația rulează pe găzduirea web a companiei (cPanel). Detalii în docs/GHID-INSTALARE.md, în limba română." : "Instalarea pe server durează ~30 de minute (vezi docs/GHID-INSTALARE.md, în limba română)."}>
       <div className="grid gap-3 sm:grid-cols-2">
         {REQUIREMENTS.map((g) => (
           <div key={g.title} className="rounded-xl border border-slate-100 p-3">
@@ -347,7 +363,7 @@ function Requirements() {
         ))}
       </div>
       <div className="mt-3 rounded-xl bg-blue-50 p-3 text-[12px] text-blue-900 ring-1 ring-blue-100">
-        <b>Pentru furnizorul GPS:</b> pozițiile se trimit prin <code className="rounded bg-white px-1">POST /api/gps</code> cu antetul{" "}
+        <b>Pentru furnizorul GPS:</b> pozițiile se trimit prin <code className="rounded bg-white px-1">POST {BASE}/api/gps</code> cu antetul{" "}
         <code className="rounded bg-white px-1">Authorization: Bearer &lt;cheia GPS&gt;</code>, de ex.{" "}
         <code className="rounded bg-white px-1">{`{"tracker":"059166","lat":47.02,"lng":28.83,"speed":42}`}</code>. Detalii tehnice: docs/INTEGRATIONS.md.
       </div>
@@ -419,7 +435,7 @@ function FeedbackSection() {
   const [filter, setFilter] = useState<"open" | "all">("open");
 
   const load = useCallback(() => {
-    fetch("/api/feedback", { cache: "no-store" })
+    fetch(api("/api/feedback"), { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((j) => setItems(j.items))
       .catch(() => setItems([]));
@@ -435,7 +451,7 @@ function FeedbackSection() {
 
   async function send() {
     setMsg(null);
-    const res = await fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }).catch(() => null);
+    const res = await fetch(api("/api/feedback"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }).catch(() => null);
     if (!res?.ok) {
       setMsg((await res?.json().catch(() => null))?.error ?? "Nu s-a putut trimite. Încercați din nou.");
       return;
@@ -451,7 +467,7 @@ function FeedbackSection() {
   }
 
   async function update(id: string, patch: { status?: Feedback["status"]; reply?: string }) {
-    await fetch("/api/feedback", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...patch }) }).catch(() => null);
+    await fetch(api("/api/feedback"), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...patch }) }).catch(() => null);
     load();
   }
 
@@ -575,7 +591,7 @@ function Faq() {
     ["Cum adaug o mașină nouă?", "Date → Flota → „Adaugă mașină”, completați și salvați. Primește următorul număr liber."],
     ["Se pierd datele dacă serverul se repornește?", "Nu. Totul e în folderul data/ de pe server. Scriptul de backup face o copie zilnică."],
     ["Cum aflu ce s-a schimbat într-o versiune nouă?", "După actualizare apare automat fereastra „Ce e nou”. Detaliile sunt la „Versiunea și ce urmează”."],
-    ["Cine poate vedea aplicația?", "Doar cine are parola de birou. Șoferii au o parolă separată și văd doar pagina Șofer."],
+    ["Cine poate vedea aplicația?", ACCESS_BY_CODE ? "Doar cine are codul de acces. Dacă se stabilește un cod separat pentru șoferi, ei văd doar pagina Șofer." : "Doar cine are parola de birou. Șoferii au o parolă separată și văd doar pagina Șofer."],
   ];
   return (
     <Section id="intrebari" icon={<AlertTriangle size={19} />} title="Întrebări frecvente">

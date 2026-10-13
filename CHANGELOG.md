@@ -20,6 +20,7 @@ La o versiune nouă: se modifică `version` în `package.json`, se mută punctel
 - Export Excel (CSV) al livrărilor; necesarul zilei față de stoc.
 - Parole pentru oficiu și pentru șoferi.
 - Instalare pe server cu un singur script, HTTPS automat, copii de rezervă zilnice.
+- Sau pe găzduirea web existentă (cPanel, PHP), într-un folder (de ex. draur.com/delivery), cu cod de acces: se încarcă o arhivă și se dezarhivează.
 - Ghid în aplicație:
   - fereastra „Bun venit” / „Ce e nou”;
   - lista „Primii pași”;

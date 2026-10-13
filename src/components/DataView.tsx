@@ -4,6 +4,7 @@ import { CheckCircle2, Cloud, Download, FileSpreadsheet, HardDrive, LocateFixed,
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FIELD_LABEL, TEMPLATE_CSV, autoMap, geocode, parseLocation, readTable, toInstitutions, type Field, type ImportRow, type Mapping } from "@/lib/importer";
 import { DATA_SOURCE, DEFAULT_WAREHOUSE, defaultTruckInfo, INSTITUTIONS, MAX_TRUCKS, WAREHOUSE } from "@/lib/seed";
+import { BASE } from "@/lib/base";
 import { liveFix, useTrucks, useUi } from "@/lib/store";
 import type { TruckInfo } from "@/lib/types";
 import { Card, Chip } from "./hud/ui";
@@ -427,7 +428,7 @@ function GpsSection() {
             </button>
           ))}
         </div>
-        <code className="rounded-lg bg-slate-50 px-2 py-1 text-[11px] text-slate-600 ring-1 ring-slate-200">POST {origin}/api/gps</code>
+        <code className="rounded-lg bg-slate-50 px-2 py-1 text-[11px] text-slate-600 ring-1 ring-slate-200">POST {origin}{BASE}/api/gps</code>
       </div>
       <div className="mt-3 overflow-auto rounded-xl border border-slate-100">
         <table className="w-full min-w-[560px] text-left text-[12px]">
