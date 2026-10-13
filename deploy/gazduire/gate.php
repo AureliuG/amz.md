@@ -4,83 +4,87 @@
  * without the access code it shows the login page; with it, it serves the app's files.
  * Drivers with their own code (cod_sofer) only get the Șofer page.
  */
-declare(strict_types=1);
 require __DIR__ . '/np.php';
 
-const TYPES = [
+$NP_TYPES = array(
     'html' => 'text/html; charset=utf-8', 'txt' => 'text/plain; charset=utf-8', 'js' => 'text/javascript; charset=utf-8',
     'css' => 'text/css; charset=utf-8', 'svg' => 'image/svg+xml', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'ico' => 'image/x-icon',
-    'webp' => 'image/webp', 'woff2' => 'font/woff2', 'webmanifest' => 'application/manifest+json',
-];
+    'webp' => 'image/webp', 'woff2' => 'font/woff2', 'webmanifest' => 'application/manifest+json', 'json' => 'application/json',
+);
 
 $base = np_base();
-$uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+$uri = (string) np_get($_SERVER, 'REQUEST_URI', '/');
 $path = rawurldecode((string) parse_url($uri, PHP_URL_PATH));
 $query = (string) parse_url($uri, PHP_URL_QUERY);
-$rel = strpos($path, $base) === 0 ? substr($path, strlen($base)) : '/';
-if ($rel === '') redirect("$base/");
+$rel = strpos($path, $base) === 0 ? (string) substr($path, strlen($base)) : '/';
+if ($rel === '') np_redirect("$base/");
 
 if (isset($_GET['iesire'])) {
     np_set_cookie('');
-    redirect("$base/");
+    np_redirect("$base/");
 }
 
 $role = np_role();
-if ($role === null) login($base);
-if ($role === 'driver' && !preg_match('#^/(sofer(/|$)|_next/|icon\.svg$|manifest\.webmanifest$)#', $rel)) redirect("$base/sofer/");
+if ($role === null) np_login($base);
+if ($role === 'driver' && !preg_match('#^/(sofer(/|$)|_next/|icon\.svg$|manifest\.webmanifest$)#', $rel)) np_redirect("$base/sofer/");
 
-serve($rel, $base, $query);
+np_serve($rel, $base, $query, $NP_TYPES);
 
-function redirect(string $to, int $status = 302): void
+function np_redirect($to, $status = 302)
 {
     header("Location: $to", true, $status);
     exit;
 }
 
-function serve(string $rel, string $base, string $query): void
+function np_serve($rel, $base, $query, $types)
 {
     $bad = strpos($rel, "\0") !== false || preg_match('#(^|/)\.|(^|/)date(/|$)#', $rel);
     $file = __DIR__ . $rel;
-    if (!$bad && substr($rel, -1) !== '/' && is_dir($file)) redirect($base . $rel . '/' . ($query !== '' ? "?$query" : ''), 301);
+    if (!$bad && substr($rel, -1) !== '/' && is_dir($file)) np_redirect($base . $rel . '/' . ($query !== '' ? "?$query" : ''), 301);
     if (substr($rel, -1) === '/') $file .= 'index.html';
     $real = realpath($file);
     $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
     $root = realpath(__DIR__);
-    if ($bad || !$real || !$root || strpos($real, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($real) || !isset(TYPES[$ext])) {
+    // Only the app's own files: never PHP, settings, data or hidden files.
+    $ok = !$bad && $real && $root && strpos($real, $root . DIRECTORY_SEPARATOR) === 0 && is_file($real) && isset($types[$ext])
+        && ($ext !== 'json' || strpos($rel, '/geo/') === 0);
+    if (!$ok) {
+        http_response_code(404);
         $real = is_file(__DIR__ . '/404.html') ? __DIR__ . '/404.html' : null;
         $ext = 'html';
-        http_response_code(404);
         if (!$real) {
             echo 'Pagina nu există.';
             exit;
         }
     }
-    header('Content-Type: ' . TYPES[$ext]);
+    header('Content-Type: ' . $types[$ext]);
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: ' . ($ext === 'html' || $ext === 'txt' ? 'no-cache, private' : 'private, max-age=86400'));
     $data = (string) file_get_contents($real);
-    $gzip = strpos((string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? ''), 'gzip') !== false && strlen($data) > 1024 && strpos(TYPES[$ext], 'image/') !== 0 && !ini_get('zlib.output_compression') && function_exists('gzencode');
+    $gzip = strpos((string) np_get($_SERVER, 'HTTP_ACCEPT_ENCODING', ''), 'gzip') !== false && strlen($data) > 1024
+        && strpos($types[$ext], 'image/') !== 0 && !ini_get('zlib.output_compression') && function_exists('gzencode');
     if ($gzip) {
         $data = (string) gzencode($data, 6);
         header('Content-Encoding: gzip');
         header('Vary: Accept-Encoding');
     }
     header('Content-Length: ' . strlen($data));
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'HEAD') echo $data;
+    if (np_get($_SERVER, 'REQUEST_METHOD', 'GET') !== 'HEAD') echo $data;
     exit;
 }
 
 /** The access-code page (and checking the code when it is sent). */
-function login(string $base): void
+function np_login($base)
 {
     $error = '';
-    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['cod'])) {
-        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
-        if (np_throttled($ip)) {
+    if (np_get($_SERVER, 'REQUEST_METHOD') === 'POST' && isset($_POST['cod'])) {
+        $ip = (string) np_get($_SERVER, 'REMOTE_ADDR', '');
+        $role = np_throttled($ip) ? false : np_check_code($_POST['cod']);
+        if ($role === false) {
             $error = 'Prea multe încercări greșite. Așteptați 15 minute.';
-        } elseif ($role = np_check_code($_POST['cod'])) {
+        } elseif ($role) {
             np_set_cookie(np_key($role));
-            redirect($role === 'driver' ? "$base/sofer/" : (string) ($_SERVER['REQUEST_URI'] ?? "$base/"), 303);
+            np_redirect($role === 'driver' ? "$base/sofer/" : (string) np_get($_SERVER, 'REQUEST_URI', "$base/"), 303);
         } else {
             np_fail($ip);
             sleep(1);
@@ -90,7 +94,7 @@ function login(string $base): void
     http_response_code(401);
     header('Content-Type: text/html; charset=utf-8');
     header('Cache-Control: no-store');
-    $v = htmlspecialchars(preg_replace('/^(\d+\.\d+)\.0$/', '$1', NP_VERSION) ?? NP_VERSION);
+    $v = htmlspecialchars((string) preg_replace('/^(\d+\.\d+)\.0$/', '$1', NP_VERSION));
     $e = htmlspecialchars($error);
     $icon = htmlspecialchars("$base/icon.svg");
     echo <<<HTML

@@ -8,6 +8,6 @@ DirectoryIndex index.html
   RewriteRule ^_next/static/ - [L]
   RewriteRule ^(icon\.svg|manifest\.webmanifest|geo/region\.json)$ - [L]
   RewriteRule ^api/(.*)$ api.php?r=$1 [QSA,L]
-  RewriteRule ^(api|gate)\.php$ - [L]
+  RewriteRule ^(api|gate|verificare)\.php$ - [L]
   RewriteRule ^ gate.php [L]
 </IfModule>

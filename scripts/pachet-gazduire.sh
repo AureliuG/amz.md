@@ -57,7 +57,7 @@ OUT="$DIST/$FOLDER"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 cp -r "$BUILD/out/." "$OUT/"
-cp deploy/gazduire/.htaccess deploy/gazduire/gate.php deploy/gazduire/api.php "$OUT/"
+cp deploy/gazduire/.htaccess deploy/gazduire/gate.php deploy/gazduire/api.php deploy/gazduire/verificare.php "$OUT/"
 sed "s/__VERSION__/$VERSION/" deploy/gazduire/np.php >"$OUT/np.php"
 # Default tracker per truck number, for phone positions before the fleet cards are saved.
 npx tsx -e '

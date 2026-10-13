@@ -63,7 +63,7 @@ Reale sunt deja:
 ## 3. Varianta simplă: pe găzduirea web (cPanel), fără server separat
 
 Dacă firma are deja un site cu cPanel, aplicația se pune într-un folder al domeniului, de ex. **`https://draur.com/delivery/`**.
-Nu trebuie Node.js, Docker sau SSH. Este nevoie doar de PHP 7.4 sau mai nou, pe care îl are orice găzduire cPanel.
+Nu trebuie Node.js, Docker sau SSH. Merge cu orice versiune de PHP de la 5.4 în sus, deci pe orice găzduire cPanel.
 
 **Ce primiți:** arhiva `nobilprest-delivery-v1.2.0.zip` (~1 MB).
 
@@ -73,6 +73,10 @@ Nu trebuie Node.js, Docker sau SSH. Este nevoie doar de PHP 7.4 sau mai nou, pe 
 3. Click dreapta pe arhivă → **Extract** → **Extract File(s)**. Apare folderul `delivery`.
 4. Deschideți **`https://draur.com/delivery/`** și introduceți **codul de acces**.
 5. Arhiva .zip din folder se poate șterge.
+
+**Dacă apare o eroare (de ex. „HTTP ERROR 500”) sau ceva nu merge:** deschideți **`http://draur.com/delivery/verificare.php`**.
+Pagina arată ce este în regulă (✓) și ce trebuie reparat (!), de ex. versiunea PHP sau folderul de date, plus ultimele erori PHP.
+Nu cere codul și nu arată codul sau cheile. După ce totul merge, `verificare.php` se poate șterge.
 
 **Codul de acces** se schimbă în `delivery/config.php` (click dreapta → **Edit**):
 
@@ -267,6 +271,7 @@ Lista completă și actualizată: în aplicație, **Ghid → Versiunea și ce ur
 
 | Problemă | Ce faceți |
 |---|---|
+| Pe găzduirea web: „HTTP ERROR 500” sau pagina nu se deschide | Deschideți `…/delivery/verificare.php` și reparați punctele roșii. |
 | Pagina nu se deschide | `cd nobilprest && sudo docker compose ps`: ambele servicii trebuie să fie „Up”. Dacă nu: `sudo docker compose up -d`. |
 | „Autentificare necesară” la fiecare deschidere | Normal la prima deschidere. Bifați „Salvează parola” în browser. |
 | Am uitat parola | Pe server: `cat nobilprest/.env`. Pentru o parolă nouă, modificați-o acolo, apoi `sudo docker compose up -d`. |
